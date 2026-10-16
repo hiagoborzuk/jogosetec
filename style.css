@@ -1927,6 +1927,241 @@ body.reduce-motion *::after {
   }
 }
 
+/* =========================================================
+   VISUAL V2 — aurora animada, logo da escola e menu enxuto
+   ========================================================= */
+
+/* Aurora no céu (fica atrás do canvas 3D) */
+.aurora {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora i {
+  position: absolute;
+  left: -20%;
+  width: 140%;
+  height: 40%;
+  border-radius: 50%;
+  filter: blur(50px);
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  animation: aurora-drift 16s ease-in-out infinite alternate;
+}
+
+.aurora i:nth-child(1) {
+  top: 0;
+  background: linear-gradient(90deg, transparent, rgba(42, 245, 200, 0.7), rgba(111, 123, 255, 0.7), transparent);
+}
+
+.aurora i:nth-child(2) {
+  top: 12%;
+  background: linear-gradient(90deg, transparent, rgba(167, 123, 255, 0.7), rgba(255, 114, 182, 0.65), transparent);
+  animation-duration: 22s;
+  animation-delay: -7s;
+}
+
+.aurora i:nth-child(3) {
+  top: 24%;
+  height: 30%;
+  background: linear-gradient(90deg, transparent, rgba(111, 244, 255, 0.5), rgba(202, 255, 114, 0.4), transparent);
+  animation-duration: 28s;
+  animation-delay: -12s;
+  opacity: 0.35;
+}
+
+@keyframes aurora-drift {
+  from { transform: translateX(-7%) rotate(-5deg) scaleY(0.85); }
+  to   { transform: translateX(7%) rotate(-1deg) scaleY(1.2); }
+}
+
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}
+
+@keyframes logo-glow {
+  0%, 100% { box-shadow: 0 0 26px rgba(111, 244, 255, 0.35), 0 12px 40px rgba(0, 0, 0, 0.5); }
+  50%      { box-shadow: 0 0 52px rgba(111, 244, 255, 0.7), 0 12px 40px rgba(0, 0, 0, 0.5); }
+}
+
+/* Logo no topo (HUD) */
+.brand-logo {
+  display: block;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(111, 244, 255, 0.6);
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0a1233;
+  box-shadow: 0 0 22px rgba(111, 244, 255, 0.35);
+}
+
+/* Logos laterais maiores, flutuando e brilhando */
+.school-side img {
+  width: clamp(96px, 13vw, 190px);
+  height: clamp(96px, 13vw, 190px);
+  border-width: 3px;
+  animation: logo-float 5s ease-in-out infinite, logo-glow 4s ease-in-out infinite;
+}
+
+.school-side-right img {
+  animation-delay: -2.5s, -2s;
+}
+
+.school-side strong {
+  border-color: rgba(111, 244, 255, 0.7);
+  background: linear-gradient(135deg, rgba(111, 244, 255, 0.22), rgba(167, 123, 255, 0.28)), rgba(6, 9, 29, 0.78);
+  box-shadow: 0 0 22px rgba(111, 244, 255, 0.25);
+}
+
+/* Título com degradê */
+h1 em {
+  background: linear-gradient(90deg, var(--cyan), var(--violet) 55%, var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 22px rgba(111, 244, 255, 0.35));
+}
+
+/* Painéis com vidro mais bonito */
+.panel-card {
+  border-color: rgba(155, 190, 255, 0.3);
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(111, 244, 255, 0.16), transparent 55%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), transparent 38%),
+    var(--panel);
+}
+
+/* Menu enxuto */
+.menu-card {
+  width: min(100%, 480px);
+  padding: clamp(26px, 4vw, 38px);
+}
+
+.menu-logo-wrap {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.menu-logo {
+  display: block;
+  width: clamp(104px, 16vw, 132px);
+  height: clamp(104px, 16vw, 132px);
+  border: 3px solid rgba(111, 244, 255, 0.7);
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0a1233;
+  animation: logo-float 5s ease-in-out infinite, logo-glow 4s ease-in-out infinite;
+}
+
+.menu-class {
+  padding: 4px 16px;
+  border: 1px solid var(--line-bright);
+  border-radius: 99px;
+  color: var(--cyan-bright);
+  background: rgba(111, 244, 255, 0.1);
+  font-size: 0.85rem;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+}
+
+.menu-card .intro {
+  max-width: 360px;
+  margin-bottom: 22px;
+}
+
+.menu-card .menu-actions {
+  margin-bottom: 18px;
+}
+
+.menu-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 7px 16px;
+  border: 1px solid rgba(255, 209, 102, 0.3);
+  border-radius: 99px;
+  background: rgba(255, 209, 102, 0.07);
+}
+
+.menu-best span {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menu-best strong {
+  color: var(--amber);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-keys {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.menu-keys span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Menu: deixa as laterais mais discretas atrás do painel */
+@media (max-width: 760px) {
+  .brand-logo {
+    width: 38px;
+    height: 38px;
+  }
+
+  .school-side img {
+    width: 64px;
+    height: 64px;
+    border-width: 2px;
+  }
+}
+
+@media (max-width: 480px) {
+  .school-side img {
+    width: 54px;
+    height: 54px;
+    border-width: 1px;
+  }
+}
+
+@media (max-height: 610px) and (orientation: landscape) {
+  .menu-logo {
+    width: 72px;
+    height: 72px;
+  }
+
+  .menu-logo-wrap {
+    margin-bottom: 6px;
+  }
+
+  .school-side img {
+    width: 56px;
+    height: 56px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
