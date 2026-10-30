@@ -81,25 +81,59 @@
     </div>
 
     <section id="menuScreen" class="screen-overlay menu-overlay" aria-labelledby="menuTitle" role="dialog" aria-modal="true">
-      <div class="panel-card menu-card">
-        <div class="menu-logo-wrap">
-          <img class="menu-logo" data-logo src="logo.jpeg" alt="Brasão do Colégio Estadual Barbosa Ferraz, 60 anos de história" width="120" height="120" decoding="async">
-          <span class="menu-class">2° D.S</span>
-        </div>
-        <h1 id="menuTitle">Aurora <em>Dash</em></h1>
-        <p class="intro">Corra pelo vale dos cristais, atravesse 5 fases e mantenha a aurora acesa.</p>
+      <div class="menu-scene" aria-hidden="true">
+        <div class="aurora menu-aurora"><i></i><i></i><i></i></div>
+        <div class="menu-stars"></div>
+        <div class="menu-stars menu-stars-2"></div>
+        <div class="menu-horizon"></div>
+        <div class="menu-floor"></div>
+      <i class="gem gem-cyan" style="--l:6%;--g:18px;--dur:14s;--delay:-2s;--t:70vh"></i>
+      <i class="gem gem-violet" style="--l:14%;--g:30px;--dur:19s;--delay:-9s;--t:35vh"></i>
+      <i class="gem gem-lime" style="--l:23%;--g:14px;--dur:12s;--delay:-5s;--t:82vh"></i>
+      <i class="gem gem-pink" style="--l:33%;--g:22px;--dur:17s;--delay:-12s;--t:55vh"></i>
+      <i class="gem gem-amber" style="--l:45%;--g:16px;--dur:15s;--delay:-7s;--t:20vh"></i>
+      <i class="gem gem-cyan" style="--l:57%;--g:26px;--dur:21s;--delay:-3s;--t:65vh"></i>
+      <i class="gem gem-pink" style="--l:68%;--g:14px;--dur:13s;--delay:-10s;--t:30vh"></i>
+      <i class="gem gem-lime" style="--l:77%;--g:30px;--dur:18s;--delay:-15s;--t:78vh"></i>
+      <i class="gem gem-violet" style="--l:86%;--g:20px;--dur:16s;--delay:-6s;--t:48vh"></i>
+      <i class="gem gem-amber" style="--l:94%;--g:16px;--dur:14s;--delay:-11s;--t:62vh"></i>
+      <span class="fly f1" style="--y:14vh;--s:150px;--dur:52s;--delay:-8s"><img data-logo src="logo.jpeg" alt="" width="150" height="150" decoding="async"></span>
+      <span class="fly f2" style="--y:74vh;--s:96px;--dur:30s;--delay:-14s"><img data-logo src="logo.jpeg" alt="" width="96" height="96" decoding="async"></span>
+      <span class="fly f3 fly-rev" style="--y:40vh;--s:120px;--dur:40s;--delay:-22s"><img data-logo src="logo.jpeg" alt="" width="120" height="120" decoding="async"></span>
+      <span class="fly f4 fly-rev" style="--y:88vh;--s:68px;--dur:22s;--delay:-5s"><img data-logo src="logo.jpeg" alt="" width="68" height="68" decoding="async"></span>
+      <span class="fly f5" style="--y:26vh;--s:78px;--dur:26s;--delay:-17s"><img data-logo src="logo.jpeg" alt="" width="78" height="78" decoding="async"></span>
+      </div>
 
-        <div class="menu-actions">
-          <button id="playButton" class="primary-button" type="button">
-            <span>Jogar agora</span><b aria-hidden="true">→</b>
-          </button>
-          <div class="secondary-actions">
-            <button id="howToButton" class="secondary-button" type="button"><span aria-hidden="true">?</span> Como jogar</button>
-            <button id="accessibilityButton" class="secondary-button" type="button"><span aria-hidden="true">⚙</span> Acessibilidade</button>
-          </div>
+      <div class="menu-hero">
+        <div class="hero-logo">
+          <span class="hero-orbit" aria-hidden="true"><i></i><i></i></span>
+          <img class="menu-logo" data-logo src="logo.jpeg" alt="Brasão do Colégio Estadual Barbosa Ferraz, 60 anos de história" width="150" height="150" decoding="async">
         </div>
 
-        <div class="menu-best"><span>Melhor pontuação</span><strong id="bestValue">0</strong></div>
+        <p class="hero-presents"><span class="menu-class">2° D.S</span><span>apresenta</span></p>
+
+        <h1 id="menuTitle" aria-label="Aurora Dash">
+          <span class="t-word t-aurora" aria-hidden="true"><span style="--i:0">A</span><span style="--i:1">U</span><span style="--i:2">R</span><span style="--i:3">O</span><span style="--i:4">R</span><span style="--i:5">A</span></span>
+          <span class="t-word t-dash" aria-hidden="true"><span style="--i:6">D</span><span style="--i:7">A</span><span style="--i:8">S</span><span style="--i:9">H</span></span>
+        </h1>
+
+        <p class="hero-tagline"><b>Desvie.</b> <b>Salte.</b> <b>Deslize.</b> <b>Brilhe!</b></p>
+
+        <button id="playButton" class="primary-button play-button" type="button">
+          <span class="play-icon" aria-hidden="true">▶</span>
+          <span class="play-label">Jogar agora</span>
+        </button>
+        <p class="play-hint">ou aperte <kbd>Enter</kbd></p>
+
+        <div class="secondary-actions">
+          <button id="howToButton" class="secondary-button" type="button"><span aria-hidden="true">?</span> Como jogar</button>
+          <button id="accessibilityButton" class="secondary-button" type="button"><span aria-hidden="true">⚙</span> Acessibilidade</button>
+        </div>
+
+        <div class="hero-chips">
+          <span class="chip"><b>5</b> fases</span>
+          <span class="chip chip-best">Recorde <strong id="bestValue">0</strong></span>
+        </div>
 
         <div class="menu-keys" aria-label="Controles principais">
           <span><kbd>A</kbd><kbd>D</kbd> mover</span>
