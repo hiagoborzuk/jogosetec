@@ -3039,3 +3039,17 @@ body[data-theme="5"] .aurora, body[data-theme="5"] .sky-glow { filter: hue-rotat
   border-radius: 0 !important;
   background: transparent !important;
 }
+
+.lightning-flash {
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(220, 235, 255, 0.55), rgba(150, 120, 255, 0.18) 60%, transparent);
+  transition: opacity 60ms ease;
+}
+
+.lightning-flash.visible {
+  opacity: 1;
+}
