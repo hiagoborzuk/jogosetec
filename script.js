@@ -65,7 +65,8 @@ const ui = {
   rightButton: document.querySelector("#rightButton"),
   jumpButton: document.querySelector("#jumpButton"),
   slideButton: document.querySelector("#slideButton"),
-  hitFlash: document.querySelector("#hitFlash")
+  hitFlash: document.querySelector("#hitFlash"),
+  lightningFlash: document.querySelector("#lightningFlash")
 };
 
 /* Troca os <img data-logo="..."> pelas imagens embutidas (mesmas usadas no WebGL). */
@@ -255,7 +256,9 @@ const PHASE_THEMES = [
   { fog: [0.09, 0.02, 0.07], road: [0.1, 0.04, 0.12, 1], shoulder: [0.2, 0.08, 0.22, 1], rail: [1, 0.55, 0.8, 1], lane: [0.95, 0.55, 0.7, 1], laneBright: [1, 0.86, 0.5, 1], mountain: [0.3, 0.08, 0.3, 1], mountainFar: [0.42, 0.13, 0.4, 1], violet: [1, 0.8, 0.4, 1] }
 ];
 const THEMED_PALETTES = PHASE_THEMES.map((theme) => Object.assign({}, PALETTES.normal, theme));
-const SIDE_LOGO_NAMES = ["barbosa", "ds", "barbosa2", "setec", "barbosa", "ds"];
+/* Lista com número ímpar de itens: como o lado alterna esquerda/direita, cada lado vê todas as logos em rodízio. */
+const SIDE_LOGO_NAMES = ["barbosa", "ds", "setec", "barbosa2", "ds"];
+let sideLogoCounter = 0;
 
 
 const state = {
@@ -287,6 +290,10 @@ const state = {
   slideTimer: 0,
   invulnerable: 0,
   boostTimer: 0,
+  shield: false,
+  worldTime: 0,
+  lightning: 4,
+  rainDone: false,
   boostActive: false,
   shake: 0,
   flash: 0,
@@ -600,6 +607,9 @@ function beginNextPhase() {
   state.phaseCrystals = 0;
   state.stage = 0;
   state.boostTimer = 0;
+  state.shield = false;
+  state.worldTime = 0;
+  state.lightning = 4;
   state.boostActive = false;
   state.invulnerable = 1;
   state.playerY = 0;
@@ -720,6 +730,7 @@ function resetWorld() {
     phase: randomBetween(0, Math.PI * 2)
   }));
 
+  sideLogoCounter = 10;
   state.sideLogos = Array.from({ length: 10 }, (_, index) => ({
     name: SIDE_LOGO_NAMES[index % SIDE_LOGO_NAMES.length],
     x: (index % 2 === 0 ? -1 : 1) * randomBetween(8, 10.2),
@@ -759,8 +770,8 @@ function getRowGap() {
 
 function createObject(type, lane, z, palette, overrides = {}) {
   const isCrystal = type === "crystal";
-  const isBoost = type === "boost";
-  const color = isCrystal ? palette.crystal : isBoost ? palette.boost : type === "wall" ? palette.wall : type === "branch" ? palette.branch : palette.rock;
+  const isBoost = type === "boost" || type === "shield";
+  const color = isCrystal ? palette.crystal : type === "shield" ? palette.laneBright : isBoost ? palette.boost : type === "wall" ? palette.wall : type === "branch" ? palette.branch : palette.rock;
   return Object.assign({
     type,
     lane,
@@ -783,8 +794,11 @@ function pickPattern(phaseNumber) {
   if (phaseNumber >= 2) {
     pool.push(["wallGap", 2.4]);
   }
+  if (phaseNumber >= 2 && !state.shield) {
+    pool.push(["shield", 0.9]);
+  }
   if (phaseNumber >= 3) {
-    pool.push(["branchWall", 1.7], ["rockWall", 1.7]);
+    pool.push(["branchWall", 1.7], ["rockWall", 1.7], ["sway", 1.6]);
   }
   if (phaseNumber >= 4) {
     pool.push(["mixed", 2.2], ["zigzag", 1.6]);
@@ -829,7 +843,37 @@ function spawnRow(z) {
     return 0;
   }
 
+  // no meio de cada fase vem uma chuva de cristais (descanso + pontos)
+  if (!state.rainDone && state.phaseDistance - z > phase.distance * 0.45) {
+    state.rainDone = true;
+    for (let row = 0; row < 4; row += 1) {
+      for (let index = 0; index < 3; index += 1) {
+        add("crystal", index, z - row * 3);
+      }
+    }
+    return 12;
+  }
+
   const pattern = pickPattern(phase.number);
+
+  if (pattern === "shield") {
+    add("shield", lane, z);
+    add("crystal", lane, z - 3);
+    add("crystal", lane, z - 5);
+    return 6;
+  }
+
+  if (pattern === "sway") {
+    // barreira que balança entre duas faixas; a terceira fica sempre livre
+    const start = randomInteger(0, 1);
+    const mid = (CONFIG.lanes[start] + CONFIG.lanes[start + 1]) / 2;
+    add("wall", start, z, { sway: { mid, amp: 1.4, speed: 1.5 + phase.difficulty, offset: randomBetween(0, Math.PI * 2) } });
+    const otherLane = start === 0 ? 2 : 0;
+    for (let index = 0; index < 3; index += 1) {
+      add("crystal", otherLane, z - 1.5 - index * 2);
+    }
+    return 6;
+  }
 
   if (pattern === "crystalLine") {
     for (let index = 0; index < 5; index += 1) {
@@ -928,6 +972,7 @@ function initGates() {
   const segments = Math.max(1, Math.round(phase.distance / 270));
   state.gates = Array.from({ length: segments }, (_, index) => Math.round(phase.distance * (index + 1) / segments));
   state.gateIndex = 0;
+  state.rainDone = false;
   state.gateZ = -(state.gates[0] - state.phaseDistance);
 }
 
@@ -978,6 +1023,8 @@ function updateGame(deltaTime) {
   state.phaseDistance = state.distance - state.phaseStartDistance;
   state.score = Math.floor(state.distance * 2 + state.crystalScore);
   state.jumpBuffer = Math.max(0, state.jumpBuffer - deltaTime);
+  state.worldTime += deltaTime;
+  updateLightning(deltaTime);
   updateGates();
 
   state.roadMarkers.forEach((marker) => {
@@ -1001,8 +1048,9 @@ function updateGame(deltaTime) {
     logo.z += worldMovement * 0.62;
     if (logo.z > 6) {
       logo.z -= 168;
-      logo.name = SIDE_LOGO_NAMES[randomInteger(0, SIDE_LOGO_NAMES.length - 1)];
-      logo.x = (logo.x < 0 ? -1 : 1) * randomBetween(8, 10.2);
+      sideLogoCounter += 1;
+      logo.name = SIDE_LOGO_NAMES[sideLogoCounter % SIDE_LOGO_NAMES.length];
+      logo.x = (sideLogoCounter % 2 === 0 ? -1 : 1) * randomBetween(8, 10.2);
       logo.y = randomBetween(3, 5.4);
       logo.size = randomBetween(3.8, 5);
     }
@@ -1069,6 +1117,9 @@ function updateObjects(worldMovement) {
     object.z += worldMovement;
     object.rotationY += object.type === "crystal" ? worldMovement * 0.018 : 0.004;
     object.rotationX += object.type === "rock" ? worldMovement * 0.005 : 0;
+    if (object.sway) {
+      object.x = object.sway.mid + Math.sin(state.worldTime * object.sway.speed + object.sway.offset) * object.sway.amp;
+    }
 
     if (object.z > 14 || object.remove) {
       object.remove = true;
@@ -1087,6 +1138,8 @@ function updateObjects(worldMovement) {
       collectCrystal(object);
     } else if (object.type === "boost") {
       collectBoost(object);
+    } else if (object.type === "shield") {
+      collectShield(object);
     } else if (object.type === "branch") {
       if (state.sliding) {
         object.passed = true;
@@ -1139,6 +1192,32 @@ function collectCrystal(object) {
   updateHud();
 }
 
+function collectShield(object) {
+  object.remove = true;
+  state.shield = true;
+  state.crystalScore += 15;
+  spawnParticles(object.x, object.y, object.z, activePalette().laneBright, 16);
+  playTone(660, 0.18, "triangle", 0.035);
+  announce("Escudo ativo • protege contra a próxima colisão", false);
+}
+
+/* Fase 4 (Tempestade): relâmpagos ocasionais iluminam a tela. */
+function updateLightning(deltaTime) {
+  if (state.phaseIndex !== 3 || state.settings.motion) {
+    return;
+  }
+  state.lightning -= deltaTime;
+  if (state.lightning <= 0) {
+    state.lightning = randomBetween(3, 7);
+    ui.lightningFlash.classList.add("visible");
+    window.setTimeout(() => ui.lightningFlash.classList.remove("visible"), 120);
+    window.setTimeout(() => {
+      ui.lightningFlash.classList.add("visible");
+      window.setTimeout(() => ui.lightningFlash.classList.remove("visible"), 80);
+    }, 220);
+  }
+}
+
 function collectBoost(object) {
   object.remove = true;
   state.boostTimer = Math.min(5.5, state.boostTimer + 3.2);
@@ -1150,6 +1229,16 @@ function collectBoost(object) {
 
 function takeDamage(object) {
   if (state.invulnerable > 0 || state.phase !== "running") {
+    return;
+  }
+
+  if (state.shield) {
+    state.shield = false;
+    state.invulnerable = 1;
+    state.shake = 0.25;
+    spawnParticles(state.playerX, 0.9, 0.15, activePalette().laneBright, 22);
+    playTone(420, 0.16, "triangle", 0.04);
+    announce("O escudo absorveu a colisão!", false);
     return;
   }
 
@@ -1550,12 +1639,6 @@ function drawArtLayer(time, palette) {
     drawArtQuad(portalArt.halo, 0, 3.7, z - 0.05, 6.2 * pulse, 6.2 * pulse, 0.9, 0.85);
     drawArtQuad(logo, 0, 3.7, z + 0.12, 3.9, 3.9, 0.35, 1);
     drawArtQuad(portalArt.label, 0, 5.95, z + 0.12, 4.4, 1.1, 0.4, 1);
-    [-4.65, 4.65].forEach((postX) => {
-      drawArtQuad(portalArt.halo, postX, 4.9, z - 0.05, 3.2, 3.2, 0.8, 0.7);
-      drawArtQuad(logo, postX, 4.9, z + 0.22, 1.95, 1.95, 0.35, 1);
-      drawArtQuad(portalArt.halo, postX, 1.75, z - 0.05, 2.6, 2.6, 0.8, 0.7);
-      drawArtQuad(logo, postX, 1.75, z + 0.22, 1.55, 1.55, 0.35, 1);
-    });
   }
 
   gl.useProgram(program);
@@ -1608,6 +1691,13 @@ function drawObjects(time, palette) {
       drawOctahedron(object.x, object.y, object.z, object.width, object.height, object.depth, object.color, time * 1.3, time * 2, 0, 1);
       drawCube(object.x, object.y, object.z, 0.16, 1.8, 0.16, palette.laneBright, 0, 0, 0, 1);
       drawCube(object.x, object.y, object.z, 1.8, 0.16, 0.16, palette.laneBright, 0, 0, 0, 1);
+      return;
+    }
+
+    if (object.type === "shield") {
+      const bob = Math.sin(time * 3 + object.phase) * 0.15;
+      drawOctahedron(object.x, object.y + bob, object.z, 0.7, 0.95, 0.7, object.color, 0, time * 2, 0, 1);
+      drawOctahedron(object.x, object.y + bob, object.z, 1.35, 1.35, 1.35, palette.cyan, 0, -time, 0, 0.3, 0.28);
       return;
     }
 
@@ -1677,6 +1767,12 @@ function drawPlayer(time, palette) {
     drawCube(state.playerX, y + 0.54, -0.15, 0.95, 0.5, 1.2, palette.suit, 0, bank, bank - 0.08, 0.25, opacity);
     drawOctahedron(state.playerX, y + 1.0, -0.42, 0.46, 0.46, 0.46, palette.helmet, 0, bank + time * 0.25, 0, 0.45, opacity);
     drawCube(state.playerX, y + 1.0, -0.67, 0.4, 0.18, 0.07, palette.visor, 0, bank, bank, 0.25, opacity);
+  }
+
+  if (state.shield) {
+    drawOctahedron(state.playerX, y + 0.95, 0, 1.9, 2.3, 1.9, palette.cyan, 0, time * 1.5, 0, 0.35, 0.22);
+    drawOctahedron(state.playerX + Math.cos(time * 3) * 1.1, y + 0.95, Math.sin(time * 3) * 1.1, 0.22, 0.22, 0.22, palette.laneBright, 0, time * 4, 0, 1);
+    drawOctahedron(state.playerX - Math.cos(time * 3) * 1.1, y + 0.95, -Math.sin(time * 3) * 1.1, 0.22, 0.22, 0.22, palette.laneBright, 0, time * 4, 0, 1);
   }
 
   if (state.invulnerable > 0 && !state.settings.motion) {
@@ -2139,7 +2235,8 @@ function describeObject(object) {
     rock: "pedra baixa",
     branch: "galho suspenso",
     crystal: "cristal",
-    boost: "orbe de impulso"
+    boost: "orbe de impulso",
+    shield: "escudo de cristal"
   };
   return labels[object.type] || "obstáculo";
 }
