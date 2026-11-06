@@ -2,6 +2,8 @@
 
 const canvas = document.querySelector("#gameCanvas");
 const ui = {
+  splashScreen: document.querySelector("#splashScreen"),
+  splashButton: document.querySelector("#splashButton"),
   menuScreen: document.querySelector("#menuScreen"),
   helpScreen: document.querySelector("#helpScreen"),
   settingsScreen: document.querySelector("#settingsScreen"),
@@ -66,6 +68,17 @@ const ui = {
   hitFlash: document.querySelector("#hitFlash")
 };
 
+/* Troca os <img data-logo="..."> pelas imagens embutidas (mesmas usadas no WebGL). */
+(function applyEmbeddedLogos() {
+  const logos = window.LOGOS || {};
+  document.querySelectorAll("img[data-logo]").forEach((img) => {
+    const source = logos[img.dataset.logo || "barbosa"];
+    if (source) {
+      img.src = source;
+    }
+  });
+})();
+
 let gl = null;
 try {
   gl = canvas.getContext("webgl", {
@@ -95,8 +108,7 @@ const CONFIG = Object.freeze({
   baseSpeed: 16,
   maxSpeed: 33,
   rowGap: 14,
-  spawnAhead: 112,
-  goalCrystals: 57,
+  spawnAhead: 150,
   gravity: 30,
   jumpVelocity: 11.4,
   slideDuration: 0.72,
@@ -234,6 +246,18 @@ const PALETTES = {
   }
 };
 
+/* Cada fase muda as cores do cenário (só na paleta normal; contraste e daltonismo ficam intactos). */
+const PHASE_THEMES = [
+  {},
+  { fog: [0.07, 0.03, 0.012], road: [0.08, 0.05, 0.07, 1], shoulder: [0.15, 0.09, 0.12, 1], rail: [1, 0.66, 0.22, 1], lane: [0.75, 0.5, 0.35, 1], laneBright: [1, 0.82, 0.38, 1], mountain: [0.24, 0.1, 0.08, 1], mountainFar: [0.34, 0.15, 0.1, 1], violet: [1, 0.55, 0.3, 1] },
+  { fog: [0.01, 0.055, 0.04], road: [0.025, 0.09, 0.09, 1], shoulder: [0.05, 0.16, 0.15, 1], rail: [0.4, 1, 0.62, 1], lane: [0.3, 0.7, 0.55, 1], laneBright: [0.55, 1, 0.72, 1], mountain: [0.04, 0.2, 0.15, 1], mountainFar: [0.07, 0.3, 0.22, 1], violet: [0.35, 0.9, 0.55, 1] },
+  { fog: [0.055, 0.01, 0.09], road: [0.07, 0.03, 0.15, 1], shoulder: [0.13, 0.06, 0.26, 1], rail: [0.86, 0.45, 1, 1], lane: [0.6, 0.38, 0.95, 1], laneBright: [0.96, 0.7, 1, 1], mountain: [0.19, 0.05, 0.32, 1], mountainFar: [0.28, 0.08, 0.45, 1], violet: [1, 0.5, 0.95, 1] },
+  { fog: [0.09, 0.02, 0.07], road: [0.1, 0.04, 0.12, 1], shoulder: [0.2, 0.08, 0.22, 1], rail: [1, 0.55, 0.8, 1], lane: [0.95, 0.55, 0.7, 1], laneBright: [1, 0.86, 0.5, 1], mountain: [0.3, 0.08, 0.3, 1], mountainFar: [0.42, 0.13, 0.4, 1], violet: [1, 0.8, 0.4, 1] }
+];
+const THEMED_PALETTES = PHASE_THEMES.map((theme) => Object.assign({}, PALETTES.normal, theme));
+const SIDE_LOGO_NAMES = ["barbosa", "ds", "barbosa2", "setec", "barbosa", "ds"];
+
+
 const state = {
   phase: "menu",
   pausedFrom: "running",
@@ -274,7 +298,11 @@ const state = {
   completedPhases: 0,
   countdown: 0,
   spawnZ: -20,
-  gateZ: -170,
+  gateZ: 999,
+  gates: [],
+  gateIndex: 0,
+  jumpBuffer: 0,
+  sideLogos: [],
   objects: [],
   particles: [],
   stars: [],
@@ -293,6 +321,11 @@ let program = null;
 let uniforms = null;
 let cubeMesh = null;
 let octahedronMesh = null;
+let texProgram = null;
+let texUniforms = null;
+let quadBuffer = null;
+let portalArt = null;
+let sceneContext = null;
 let audioContext = null;
 let canvasReady = false;
 
@@ -305,6 +338,7 @@ function initializeGame() {
     program = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
     cubeMesh = createCubeMesh();
     octahedronMesh = createOctahedronMesh();
+    initPortalArt();
 
     uniforms = {
       position: gl.getAttribLocation(program, "aPosition"),
@@ -336,7 +370,7 @@ function initializeGame() {
     bindEvents();
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
-    showMenu();
+    showSplash();
     canvasReady = true;
     requestAnimationFrame(frame);
     renderScene(0);
@@ -349,6 +383,7 @@ function initializeGame() {
 function showWebGLError(message) {
   state.phase = "error";
   ui.errorMessage.textContent = message;
+  ui.splashScreen.hidden = true;
   ui.menuScreen.hidden = true;
   ui.helpScreen.hidden = true;
   ui.settingsScreen.hidden = true;
@@ -358,6 +393,17 @@ function showWebGLError(message) {
   ui.errorScreen.hidden = false;
   ui.pauseButton.disabled = true;
   ui.playButton.disabled = true;
+}
+
+function showSplash() {
+  state.phase = "menu";
+  state.settingsOrigin = "menu";
+  resetWorld();
+  hideAllScreens();
+  ui.splashScreen.hidden = false;
+  ui.pauseButton.disabled = true;
+  setStatus("Tela inicial • aperte Começar");
+  window.setTimeout(() => ui.splashButton.focus(), 0);
 }
 
 function showMenu() {
@@ -374,6 +420,7 @@ function showMenu() {
 }
 
 function hideAllScreens() {
+  ui.splashScreen.hidden = true;
   ui.menuScreen.hidden = true;
   ui.helpScreen.hidden = true;
   ui.settingsScreen.hidden = true;
@@ -460,6 +507,7 @@ function finishRun(completedAllPhases = false) {
   state.phase = "finished";
   state.speed = 0;
   state.shake = 0;
+  state.gateZ = 999;
   clearInput();
   ui.countdown.hidden = true;
   ui.pauseScreen.hidden = true;
@@ -558,7 +606,7 @@ function beginNextPhase() {
   state.playerVY = 0;
   state.sliding = false;
   state.slideTimer = 0;
-  state.gateZ = -150;
+  initGates();
   populateTrack();
 
   const nextPhase = getCurrentPhase();
@@ -651,7 +699,8 @@ function resetWorld() {
   state.phaseDistance = 0;
   state.phaseCrystals = 0;
   state.completedPhases = 0;
-  state.gateZ = -170;
+  state.jumpBuffer = 0;
+  initGates();
   state.roadMarkers = Array.from({ length: 19 }, (_, index) => ({ z: -index * 9.5 }));
 
   state.stars = Array.from({ length: 110 }, () => ({
@@ -663,11 +712,20 @@ function resetWorld() {
     warm: Math.random() > 0.82
   }));
 
-  state.decor = Array.from({ length: 26 }, (_, index) => ({
-    x: (index % 2 === 0 ? -1 : 1) * randomBetween(5.6, 13.5),
+  state.decor = Array.from({ length: 30 }, (_, index) => ({
+    x: (index % 2 === 0 ? -1 : 1) * randomBetween(7.4, 14.5),
     y: randomBetween(0.3, 2.4),
     z: -8 - index * 6.2,
     size: randomBetween(0.5, 1.8),
+    phase: randomBetween(0, Math.PI * 2)
+  }));
+
+  state.sideLogos = Array.from({ length: 10 }, (_, index) => ({
+    name: SIDE_LOGO_NAMES[index % SIDE_LOGO_NAMES.length],
+    x: (index % 2 === 0 ? -1 : 1) * randomBetween(8, 10.2),
+    y: randomBetween(3, 5.4),
+    z: -10 - index * 16.8,
+    size: randomBetween(3.8, 5),
     phase: randomBetween(0, Math.PI * 2)
   }));
 
@@ -679,11 +737,8 @@ function resetWorld() {
 function populateTrack() {
   state.objects = [];
   state.particles = [];
-  state.spawnZ = -20;
-  for (let index = 0; index < 15; index += 1) {
-    spawnRow(state.spawnZ - index * CONFIG.rowGap);
-  }
-  state.spawnZ = -20 - 15 * CONFIG.rowGap;
+  state.spawnZ = -34;
+  ensureFutureRows();
 }
 
 function getCurrentPhase() {
@@ -695,103 +750,204 @@ function getPhaseProgress() {
   return clamp(state.phaseDistance / phase.distance, 0, 1);
 }
 
+/* Distância entre "linhas" de obstáculos: mantém um tempo de reação justo conforme a velocidade da fase. */
+function getRowGap() {
+  const phase = getCurrentPhase();
+  const reactionTime = 1.05 - phase.difficulty * 0.5;
+  return clamp((phase.baseSpeed + 1.5) * reactionTime, 13, 20);
+}
+
+function createObject(type, lane, z, palette, overrides = {}) {
+  const isCrystal = type === "crystal";
+  const isBoost = type === "boost";
+  const color = isCrystal ? palette.crystal : isBoost ? palette.boost : type === "wall" ? palette.wall : type === "branch" ? palette.branch : palette.rock;
+  return Object.assign({
+    type,
+    lane,
+    x: CONFIG.lanes[lane],
+    y: isCrystal ? 0.9 : isBoost ? 0.9 : type === "branch" ? 1.8 : type === "wall" ? 1.15 : 0.55,
+    z,
+    width: isCrystal ? 0.7 : isBoost ? 0.8 : type === "wall" ? 1.95 : type === "branch" ? 2.15 : 1.3,
+    height: isCrystal ? 0.7 : isBoost ? 0.8 : type === "wall" ? 2.3 : type === "branch" ? 0.5 : 1.15,
+    depth: isCrystal ? 0.7 : isBoost ? 0.8 : type === "wall" ? 0.7 : 0.9,
+    rotationX: isCrystal ? randomBetween(0, Math.PI) : 0,
+    rotationY: isCrystal || isBoost ? randomBetween(0, Math.PI) : randomBetween(-0.08, 0.08),
+    rotationZ: 0,
+    phase: randomBetween(0, Math.PI * 2),
+    color
+  }, overrides);
+}
+
+function pickPattern(phaseNumber) {
+  const pool = [["single", 3], ["crystalLine", 2.2], ["boost", 0.7]];
+  if (phaseNumber >= 2) {
+    pool.push(["wallGap", 2.4]);
+  }
+  if (phaseNumber >= 3) {
+    pool.push(["branchWall", 1.7], ["rockWall", 1.7]);
+  }
+  if (phaseNumber >= 4) {
+    pool.push(["mixed", 2.2], ["zigzag", 1.6]);
+  }
+  if (phaseNumber >= 5) {
+    pool.push(["doubleWall", 1.8]);
+  }
+  const total = pool.reduce((sum, entry) => sum + entry[1], 0);
+  let roll = Math.random() * total;
+  for (const [name, weight] of pool) {
+    roll -= weight;
+    if (roll <= 0) {
+      return name;
+    }
+  }
+  return "single";
+}
+
+function isNearGate(z) {
+  const distanceInPhase = state.phaseDistance - z;
+  return state.gates.some((gate) => Math.abs(distanceInPhase - gate) < 16);
+}
+
+/* Cria um grupo de objetos e devolve quanto espaço extra ele ocupa na pista. Sempre existe um caminho livre. */
 function spawnRow(z) {
   const phase = getCurrentPhase();
-  const difficulty = clamp(phase.difficulty + getPhaseProgress() * 0.16, 0, 1);
-  const roll = Math.random();
-  const lane = randomInteger(0, 2);
   const palette = activePalette();
+  const lane = randomInteger(0, 2);
+  const free = randomInteger(0, 2);
+  const add = (type, objectLane, objectZ, overrides) => {
+    state.objects.push(createObject(type, objectLane, objectZ, palette, overrides));
+  };
 
-  if (roll < 0.28) {
-    const count = Math.random() < 0.42 ? 2 : 1;
-    for (let index = 0; index < count; index += 1) {
-      const crystalLane = count === 1 ? lane : (lane + index) % 3;
-      state.objects.push({
-        type: "crystal",
-        lane: crystalLane,
-        x: CONFIG.lanes[crystalLane],
-        y: 0.9,
-        z: z - index * 1.8,
-        width: 0.7,
-        height: 0.7,
-        depth: 0.7,
-        rotationX: randomBetween(0, Math.PI),
-        rotationY: randomBetween(0, Math.PI),
-        rotationZ: randomBetween(0, Math.PI),
-        phase: randomBetween(0, Math.PI * 2),
-        color: palette.crystal
-      });
+  // Antes do portal a pista fica limpa, só com cristais de recompensa.
+  if (isNearGate(z) || state.phaseDistance - z > phase.distance - 30) {
+    if (Math.random() < 0.55) {
+      for (let index = 0; index < 3; index += 1) {
+        add("crystal", lane, z - index * 2.2);
+      }
+      return 5;
     }
-    return;
+    return 0;
   }
 
-  if (roll < 0.72) {
-    const types = difficulty > 0.5
-      ? ["wall", "rock", "branch", "rock"]
-      : ["wall", "rock", "branch"];
-    const type = types[randomInteger(0, types.length - 1)];
-    const color = type === "wall" ? palette.wall : type === "branch" ? palette.branch : palette.rock;
-    const base = {
-      type,
-      lane,
-      x: CONFIG.lanes[lane],
-      y: type === "branch" ? 1.8 : type === "wall" ? 1.15 : 0.55,
-      z,
-      width: type === "wall" ? 1.95 : type === "branch" ? 2.15 : 1.3,
-      height: type === "wall" ? 2.3 : type === "branch" ? 0.5 : 1.15,
-      depth: type === "wall" ? 0.7 : 0.9,
-      rotationX: 0,
-      rotationY: randomBetween(-0.08, 0.08),
-      rotationZ: 0,
-      phase: randomBetween(0, Math.PI * 2),
-      color
-    };
-    state.objects.push(base);
+  const pattern = pickPattern(phase.number);
 
-    if (Math.random() < 0.3) {
-      const crystalLane = (lane + 1 + randomInteger(0, 1)) % 3;
-      state.objects.push({
-        type: "crystal",
-        lane: crystalLane,
-        x: CONFIG.lanes[crystalLane],
-        y: 0.95,
-        z: z - 1.5,
-        width: 0.7,
-        height: 0.7,
-        depth: 0.7,
-        rotationX: 0,
-        rotationY: randomBetween(0, Math.PI),
-        rotationZ: 0,
-        phase: randomBetween(0, Math.PI * 2),
-        color: palette.crystal
-      });
+  if (pattern === "crystalLine") {
+    for (let index = 0; index < 5; index += 1) {
+      add("crystal", lane, z - index * 2.2);
     }
-    return;
+    return 9;
   }
 
-  if (roll < 0.84) {
-    state.objects.push({
-      type: "boost",
-      lane,
-      x: CONFIG.lanes[lane],
-      y: 0.9,
-      z,
-      width: 0.8,
-      height: 0.8,
-      depth: 0.8,
-      rotationX: 0,
-      rotationY: randomBetween(0, Math.PI),
-      rotationZ: 0,
-      phase: randomBetween(0, Math.PI * 2),
-      color: palette.boost
+  if (pattern === "zigzag") {
+    const sequence = [0, 1, 2, 1, 0];
+    const start = Math.random() < 0.5 ? 0 : 1;
+    sequence.forEach((value, index) => {
+      add("crystal", start === 0 ? value : 2 - value, z - index * 3);
     });
+    return 12;
   }
+
+  if (pattern === "boost") {
+    add("boost", lane, z);
+    add("crystal", lane, z - 3);
+    add("crystal", lane, z - 5.2);
+    return 6;
+  }
+
+  if (pattern === "wallGap") {
+    for (let index = 0; index < 3; index += 1) {
+      if (index !== free) {
+        add("wall", index, z);
+      }
+    }
+    for (let index = 0; index < 3; index += 1) {
+      add("crystal", free, z - 1.5 - index * 2);
+    }
+    return 5;
+  }
+
+  if (pattern === "doubleWall") {
+    const nextFree = clamp(free + (Math.random() < 0.5 ? -1 : 1), 0, 2);
+    for (let index = 0; index < 3; index += 1) {
+      if (index !== free) {
+        add("wall", index, z);
+      }
+      if (index !== nextFree) {
+        add("wall", index, z - 10);
+      }
+    }
+    add("crystal", free, z - 5);
+    add("crystal", nextFree, z - 6.4);
+    return 14;
+  }
+
+  if (pattern === "branchWall") {
+    for (let index = 0; index < 3; index += 1) {
+      add("branch", index, z);
+    }
+    add("crystal", 1, z - 3);
+    return 4;
+  }
+
+  if (pattern === "rockWall") {
+    for (let index = 0; index < 3; index += 1) {
+      add("rock", index, z);
+    }
+    add("crystal", 1, z - 2.5);
+    return 3;
+  }
+
+  if (pattern === "mixed") {
+    const order = [0, 1, 2].sort(() => Math.random() - 0.5);
+    add("wall", order[0], z);
+    add("rock", order[1], z);
+    add("branch", order[2], z);
+    return 3;
+  }
+
+  // "single": um obstáculo, às vezes com cristal na faixa ao lado
+  const difficulty = clamp(phase.difficulty + getPhaseProgress() * 0.16, 0, 1);
+  const types = difficulty > 0.5 ? ["wall", "rock", "branch", "rock"] : ["wall", "rock", "branch"];
+  add(types[randomInteger(0, types.length - 1)], lane, z);
+  if (Math.random() < 0.45) {
+    add("crystal", (lane + 1 + randomInteger(0, 1)) % 3, z - 1.5);
+  }
+  return 0;
 }
 
 function ensureFutureRows() {
   while (state.spawnZ > -CONFIG.spawnAhead) {
-    spawnRow(state.spawnZ);
-    state.spawnZ -= CONFIG.rowGap;
+    const extra = spawnRow(state.spawnZ);
+    state.spawnZ -= getRowGap() + extra;
+  }
+}
+
+/* Portais: um a cada trecho da fase (checkpoint) e o último marca o fim da fase. */
+function initGates() {
+  const phase = getCurrentPhase();
+  const segments = Math.max(1, Math.round(phase.distance / 270));
+  state.gates = Array.from({ length: segments }, (_, index) => Math.round(phase.distance * (index + 1) / segments));
+  state.gateIndex = 0;
+  state.gateZ = -(state.gates[0] - state.phaseDistance);
+}
+
+function updateGates() {
+  if (state.gateIndex >= state.gates.length) {
+    state.gateZ = 999;
+    return;
+  }
+  const target = state.gates[state.gateIndex];
+  state.gateZ = -(target - state.phaseDistance);
+  if (state.gateZ <= 0) {
+    return;
+  }
+  const isFinal = state.gateIndex === state.gates.length - 1;
+  state.gateIndex += 1;
+  if (!isFinal) {
+    state.crystalScore += 50;
+    spawnParticles(0, 3.5, 0, activePalette().laneBright, 26);
+    playTone(760, 0.14, "triangle", 0.04);
+    announce("Checkpoint 2° D.S • +50 pontos", false);
   }
 }
 
@@ -821,10 +977,8 @@ function updateGame(deltaTime) {
   state.spawnZ += worldMovement;
   state.phaseDistance = state.distance - state.phaseStartDistance;
   state.score = Math.floor(state.distance * 2 + state.crystalScore);
-  state.gateZ += worldMovement;
-  if (state.gateZ > 16) {
-    state.gateZ = -170;
-  }
+  state.jumpBuffer = Math.max(0, state.jumpBuffer - deltaTime);
+  updateGates();
 
   state.roadMarkers.forEach((marker) => {
     marker.z += worldMovement;
@@ -836,10 +990,21 @@ function updateGame(deltaTime) {
   state.decor.forEach((item) => {
     item.z += worldMovement * 0.48;
     if (item.z > 8) {
-      item.z -= 160;
-      item.x = (item.x < 0 ? -1 : 1) * randomBetween(5.6, 13.5);
+      item.z -= 190;
+      item.x = (item.x < 0 ? -1 : 1) * randomBetween(7.4, 14.5);
       item.y = randomBetween(0.3, 2.4);
       item.size = randomBetween(0.5, 1.8);
+    }
+  });
+
+  state.sideLogos.forEach((logo) => {
+    logo.z += worldMovement * 0.62;
+    if (logo.z > 6) {
+      logo.z -= 168;
+      logo.name = SIDE_LOGO_NAMES[randomInteger(0, SIDE_LOGO_NAMES.length - 1)];
+      logo.x = (logo.x < 0 ? -1 : 1) * randomBetween(8, 10.2);
+      logo.y = randomBetween(3, 5.4);
+      logo.size = randomBetween(3.8, 5);
     }
   });
 
@@ -891,6 +1056,10 @@ function updatePlayer(deltaTime) {
   if (state.playerY <= 0) {
     state.playerY = 0;
     state.playerVY = 0;
+    if (state.jumpBuffer > 0) {
+      state.jumpBuffer = 0;
+      jump();
+    }
   }
 }
 
@@ -1123,8 +1292,10 @@ function renderScene(time) {
   gl.uniformMatrix4fv(uniforms.viewProjection, false, viewProjection);
   gl.uniform3fv(uniforms.cameraPosition, camera);
   gl.uniform3fv(uniforms.fogColor, palette.fog);
+  sceneContext = { viewProjection, camera, fog: palette.fog };
 
   drawEnvironment(time, palette);
+  drawArtLayer(time, palette);
   drawObjects(time, palette);
   drawParticles(palette);
   drawPlayer(time, palette);
@@ -1145,22 +1316,7 @@ function drawEnvironment(time, palette) {
     drawCube(0, 0.025, marker.z, 9.8, 0.035, 0.08, color, 0, 0, 0, index % 4 === 0 ? 1 : 0.55);
   });
 
-  state.decor.forEach((item) => {
-    const pulse = 0.85 + Math.sin(time * 1.6 + item.phase) * 0.15;
-    drawOctahedron(
-      item.x,
-      item.y,
-      item.z,
-      item.size * pulse,
-      item.size * 1.8 * pulse,
-      item.size * pulse,
-      item.x < 0 ? palette.crystal : palette.violet,
-      0,
-      time * 0.2 + item.phase,
-      0,
-      0.55
-    );
-  });
+  drawSideDecor(time, palette);
 
   state.stars.forEach((star) => {
     const pulse = 0.65 + Math.sin(time * 1.8 + star.phase) * 0.35;
@@ -1176,15 +1332,241 @@ function drawEnvironment(time, palette) {
   drawPortal(time, palette);
 }
 
+function drawSideDecor(time, palette) {
+  const theme = clamp(state.phaseIndex, 0, 4);
+  state.decor.forEach((item) => {
+    const pulse = 0.85 + Math.sin(time * 1.6 + item.phase) * 0.15;
+    const side = item.x < 0 ? -1 : 1;
+    const accent = side < 0 ? palette.crystal : palette.violet;
+
+    if (theme === 1) {
+      // Minas: pilares de cristal com topo brilhante
+      const height = 2.6 + item.size * 2.2;
+      drawCube(item.x, height / 2 - 0.4, item.z, 0.9 * item.size, height, 0.9 * item.size, palette.mountain, 0, item.phase, 0, 0.1);
+      drawOctahedron(item.x, height - 0.1, item.z, 0.7 * item.size * pulse, 1.1 * item.size * pulse, 0.7 * item.size * pulse, palette.laneBright, 0, time * 0.4, 0, 0.9);
+    } else if (theme === 2) {
+      // Bosque: ilhas flutuantes com broto de cristal
+      const y = 2.2 + item.y * 1.6 + Math.sin(time * 0.9 + item.phase) * 0.5;
+      drawCube(item.x, y, item.z, 1.7 * item.size, 0.4, 1.6 * item.size, palette.mountainFar, 0, item.phase * 0.12, 0, 0.14);
+      drawCube(item.x, y - 0.45, item.z, 0.9 * item.size, 0.6, 0.85 * item.size, palette.mountain, 0, item.phase * 0.12, 0, 0.06);
+      drawOctahedron(item.x, y + 0.7 * item.size, item.z, 0.45 * item.size * pulse, 0.9 * item.size * pulse, 0.45 * item.size * pulse, palette.laneBright, 0, time * 0.5, 0, 0.8);
+    } else if (theme === 3) {
+      // Tempestade: raios que piscam
+      const flicker = Math.sin(time * 9 + item.phase * 7) > 0.35 ? 1 : 0.35;
+      drawCube(item.x, 4 + item.size, item.z, 0.16 * item.size, 7 + item.size * 3, 0.16 * item.size, palette.laneBright, 0, 0, side * 0.22, flicker, 0.9);
+      drawOctahedron(item.x, 0.8, item.z, 0.9 * item.size, 1.3 * item.size, 0.9 * item.size, accent, 0, time * 0.3 + item.phase, 0, 0.6);
+    } else if (theme === 4) {
+      // Arco da Aurora: colunas de prismas empilhados
+      for (let step = 0; step < 4; step += 1) {
+        const scale = (1 - step * 0.2) * item.size;
+        drawOctahedron(item.x, 0.9 + step * 1.45 * item.size, item.z, 0.8 * scale * pulse, 1.2 * scale * pulse, 0.8 * scale * pulse, step % 2 === 0 ? palette.laneBright : palette.violet, 0, time * 0.5 + step, 0, 0.75);
+      }
+    } else {
+      drawOctahedron(item.x, item.y, item.z, item.size * pulse, item.size * 1.8 * pulse, item.size * pulse, accent, 0, time * 0.2 + item.phase, 0, 0.55);
+    }
+  });
+}
+
 function drawPortal(time, palette) {
-  if (state.gateZ > 8) {
+  if (state.gateZ > 8 || state.gateZ < -178) {
     return;
   }
+  const isFinal = state.gateIndex >= state.gates.length - 1;
   const pulse = 0.85 + Math.sin(time * 4) * 0.15;
-  drawCube(-4.65, 3.3, state.gateZ, 0.24, 6.6, 0.24, palette.laneBright, 0, 0, 0, 1);
-  drawCube(4.65, 3.3, state.gateZ, 0.24, 6.6, 0.24, palette.laneBright, 0, 0, 0, 1);
-  drawCube(0, 6.7, state.gateZ, 9.5, 0.24, 0.24, palette.laneBright, 0, 0, 0, 1);
-  drawOctahedron(0, 3.35, state.gateZ, 1.05 * pulse, 1.05 * pulse, 1.05 * pulse, palette.boost, 0, time * 1.4, time, 1);
+  const frame = isFinal ? palette.starWarm : palette.laneBright;
+  // traves + travessão
+  drawCube(-4.65, 3.3, state.gateZ, 0.34, 6.6, 0.34, frame, 0, 0, 0, 1);
+  drawCube(4.65, 3.3, state.gateZ, 0.34, 6.6, 0.34, frame, 0, 0, 0, 1);
+  drawCube(0, 6.7, state.gateZ, 9.6, 0.34, 0.34, frame, 0, 0, 0, 1);
+  drawCube(-4.65, 0.2, state.gateZ, 0.9, 0.4, 0.9, palette.shoulder, 0, 0, 0, 0.2);
+  drawCube(4.65, 0.2, state.gateZ, 0.9, 0.4, 0.9, palette.shoulder, 0, 0, 0, 0.2);
+  // cristais giratórios nas laterais do brasão central
+  drawOctahedron(-3.1, 3.7, state.gateZ, 0.6 * pulse, 0.6 * pulse, 0.6 * pulse, palette.boost, 0, time * 1.4, time, 1);
+  drawOctahedron(3.1, 3.7, state.gateZ, 0.6 * pulse, 0.6 * pulse, 0.6 * pulse, palette.boost, 0, -time * 1.4, time, 1);
+  if (isFinal) {
+    // faixa de chegada pulsando no chão
+    drawCube(0, 0.06, state.gateZ, 9.4, 0.06, 0.7, palette.starWarm, 0, 0, 0, 0.6 + pulse * 0.4, 0.85);
+  }
+}
+
+/* ---------- Arte 3D: brasão do Barbosa nas traves, placa "2° D.S" e logos flutuando nas laterais ---------- */
+function initPortalArt() {
+  texProgram = createProgram(TEX_VERTEX_SHADER, TEX_FRAGMENT_SHADER, ["aPosition", "aUV"]);
+  texUniforms = {
+    model: gl.getUniformLocation(texProgram, "uModel"),
+    viewProjection: gl.getUniformLocation(texProgram, "uViewProjection"),
+    cameraPosition: gl.getUniformLocation(texProgram, "uCameraPosition"),
+    fogColor: gl.getUniformLocation(texProgram, "uFogColor"),
+    glow: gl.getUniformLocation(texProgram, "uGlow"),
+    alpha: gl.getUniformLocation(texProgram, "uAlpha"),
+    texture: gl.getUniformLocation(texProgram, "uTexture")
+  };
+
+  const quad = new Float32Array([
+    -0.5, -0.5, 0, 0, 1,   0.5, -0.5, 0, 1, 1,   0.5, 0.5, 0, 1, 0,
+    -0.5, -0.5, 0, 0, 1,   0.5, 0.5, 0, 1, 0,   -0.5, 0.5, 0, 0, 0
+  ]);
+  quadBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+
+  portalArt = {
+    tex: {},
+    label: createCanvasTexture(makeLabelCanvas("2° D.S")),
+    halo: createCanvasTexture(makeHaloCanvas())
+  };
+  const fallbackFiles = {
+    barbosa: "imagens/logo-barbosa.png",
+    barbosa2: "imagens/logo-barbosa-2.png",
+    ds: "imagens/logo-ds.png",
+    setec: "imagens/setec2026.jpg"
+  };
+  Object.keys(fallbackFiles).forEach((name) => {
+    portalArt.tex[name] = createBlankTexture();
+    loadLogoTexture(portalArt.tex[name], (window.LOGOS && window.LOGOS[name]) || fallbackFiles[name], name);
+  });
+}
+
+function loadLogoTexture(texture, source, name) {
+  const image = new Image();
+  image.onload = () => {
+    // Redesenha em 512x512 (potência de 2) para permitir mipmaps no WebGL 1.
+    const square = document.createElement("canvas");
+    square.width = 512;
+    square.height = 512;
+    square.getContext("2d").drawImage(image, 0, 0, 512, 512);
+    uploadTexture(texture, square);
+  };
+  image.onerror = () => console.warn(`Não foi possível carregar a imagem "${name}" para o cenário 3D.`);
+  image.src = source;
+}
+
+function createBlankTexture() {
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return texture;
+}
+
+function createCanvasTexture(source) {
+  const texture = createBlankTexture();
+  uploadTexture(texture, source);
+  return texture;
+}
+
+function uploadTexture(texture, source) {
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+}
+
+function makeLabelCanvas(text) {
+  const label = document.createElement("canvas");
+  label.width = 512;
+  label.height = 128;
+  const ctx = label.getContext("2d");
+  const gradient = ctx.createLinearGradient(0, 0, 512, 0);
+  gradient.addColorStop(0, "#0b1a4d");
+  gradient.addColorStop(0.5, "#1a3aa8");
+  gradient.addColorStop(1, "#0b1a4d");
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(6, 6, 500, 116, 58);
+  } else {
+    ctx.rect(6, 6, 500, 116);
+  }
+  ctx.fillStyle = gradient;
+  ctx.fill();
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = "#6ff4ff";
+  ctx.stroke();
+  ctx.font = "900 84px 'Segoe UI', Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(3, 8, 30, 0.85)";
+  ctx.strokeText(text, 256, 70);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(text, 256, 70);
+  return label;
+}
+
+function makeHaloCanvas() {
+  const halo = document.createElement("canvas");
+  halo.width = 256;
+  halo.height = 256;
+  const ctx = halo.getContext("2d");
+  const gradient = ctx.createRadialGradient(128, 128, 60, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(111, 244, 255, 0.85)");
+  gradient.addColorStop(0.55, "rgba(111, 170, 255, 0.35)");
+  gradient.addColorStop(1, "rgba(111, 170, 255, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 256, 256);
+  return halo;
+}
+
+function drawArtLayer(time, palette) {
+  if (!texProgram || !portalArt || !sceneContext) {
+    return;
+  }
+
+  gl.useProgram(texProgram);
+  gl.uniformMatrix4fv(texUniforms.viewProjection, false, sceneContext.viewProjection);
+  gl.uniform3fv(texUniforms.cameraPosition, sceneContext.camera);
+  gl.uniform3fv(texUniforms.fogColor, sceneContext.fog);
+  gl.uniform1i(texUniforms.texture, 0);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12);
+
+  // logos flutuando nas laterais da pista
+  state.sideLogos.forEach((logo) => {
+    const texture = portalArt.tex[logo.name];
+    if (!texture) {
+      return;
+    }
+    const side = logo.x < 0 ? -1 : 1;
+    const bob = Math.sin(time * 1.4 + logo.phase) * 0.35;
+    const turn = side * -0.4 + Math.sin(time * 0.8 + logo.phase) * 0.14;
+    const aspect = logo.name === "setec" ? 1.145 : 1;
+    drawArtQuad(portalArt.halo, logo.x, logo.y + bob, logo.z - 0.12, logo.size * 1.55, logo.size * 1.55, 0.7, 0.55, turn);
+    drawArtQuad(texture, logo.x, logo.y + bob, logo.z, logo.size * aspect, logo.size, 0.3, 1, turn);
+  });
+
+  // portal: brasão nas traves, brasão central e placa 2° D.S
+  if (state.gateZ <= 8 && state.gateZ >= -178) {
+    const z = state.gateZ;
+    const pulse = 1 + Math.sin(time * 3) * 0.04;
+    const logo = portalArt.tex.barbosa;
+    drawArtQuad(portalArt.halo, 0, 3.7, z - 0.05, 6.2 * pulse, 6.2 * pulse, 0.9, 0.85);
+    drawArtQuad(logo, 0, 3.7, z + 0.12, 3.9, 3.9, 0.35, 1);
+    drawArtQuad(portalArt.label, 0, 5.95, z + 0.12, 4.4, 1.1, 0.4, 1);
+    [-4.65, 4.65].forEach((postX) => {
+      drawArtQuad(portalArt.halo, postX, 4.9, z - 0.05, 3.2, 3.2, 0.8, 0.7);
+      drawArtQuad(logo, postX, 4.9, z + 0.22, 1.95, 1.95, 0.35, 1);
+      drawArtQuad(portalArt.halo, postX, 1.75, z - 0.05, 2.6, 2.6, 0.8, 0.7);
+      drawArtQuad(logo, postX, 1.75, z + 0.22, 1.55, 1.55, 0.35, 1);
+    });
+  }
+
+  gl.useProgram(program);
+}
+
+function drawArtQuad(texture, x, y, z, width, height, glow, alpha, rotationY = 0) {
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.uniformMatrix4fv(texUniforms.model, false, composeModel([x, y, z], [width, height, 1], [0, rotationY, 0]));
+  gl.uniform1f(texUniforms.glow, glow);
+  gl.uniform1f(texUniforms.alpha, alpha);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
 }
 
 function drawObjects(time, palette) {
@@ -1307,7 +1689,7 @@ function drawPlayer(time, palette) {
 }
 
 function trapDialogFocus(event) {
-  const dialogs = [ui.menuScreen, ui.helpScreen, ui.settingsScreen, ui.pauseScreen, ui.phaseScreen, ui.resultScreen, ui.errorScreen];
+  const dialogs = [ui.splashScreen, ui.menuScreen, ui.helpScreen, ui.settingsScreen, ui.pauseScreen, ui.phaseScreen, ui.resultScreen, ui.errorScreen];
   const dialog = dialogs.find((screen) => !screen.hidden);
   if (!dialog) {
     return;
@@ -1333,6 +1715,7 @@ function trapDialogFocus(event) {
 }
 
 function bindEvents() {
+  ui.splashButton.addEventListener("click", showMenu);
   ui.playButton.addEventListener("click", startRun);
   ui.howToButton.addEventListener("click", openHelp);
   ui.accessibilityButton.addEventListener("click", () => openSettings("menu"));
@@ -1405,6 +1788,15 @@ function bindEvents() {
     const resultOpen = !ui.resultScreen.hidden;
     const errorOpen = !ui.errorScreen.hidden;
     const menuOpen = !ui.menuScreen.hidden;
+    const splashOpen = !ui.splashScreen.hidden;
+
+    if (splashOpen) {
+      if (event.code === "Enter" || event.code === "Space") {
+        event.preventDefault();
+        showMenu();
+      }
+      return;
+    }
 
     if (event.key === "Escape") {
       if (helpOpen) {
@@ -1556,7 +1948,11 @@ function moveLane(direction) {
 }
 
 function jump() {
-  if (state.phase !== "running" || state.playerY > 0.06) {
+  if (state.phase !== "running") {
+    return;
+  }
+  if (state.playerY > 0.06) {
+    state.jumpBuffer = 0.14; // aperta um pouco antes de pousar: o pulo sai assim que tocar o chão
     return;
   }
   state.sliding = false;
@@ -1619,6 +2015,7 @@ function updateHud() {
   ui.comboValue.textContent = `x${state.combo}`;
   ui.bestValue.textContent = formatNumber(state.highScore);
   ui.phaseLabel.textContent = `Fase ${phase.number} • ${phase.name}`;
+  document.body.dataset.theme = String(phase.number);
   ui.missionFill.style.width = `${phaseProgress * 100}%`;
   ui.missionValue.textContent = `${formatNumber(Math.floor(phaseDistance))} / ${formatNumber(phase.distance)} m`;
   ui.missionFill.parentElement.setAttribute("aria-valuemax", String(phase.distance));
@@ -1733,7 +2130,7 @@ function activePalette() {
   if (state.settings.colorSafe) {
     return PALETTES.safe;
   }
-  return PALETTES.normal;
+  return THEMED_PALETTES[clamp(state.phaseIndex, 0, THEMED_PALETTES.length - 1)];
 }
 
 function describeObject(object) {
@@ -1803,12 +2200,13 @@ function applyModelTransform(x, y, z, scaleX, scaleY, scaleZ, rotationX, rotatio
   gl.uniform1f(uniforms.alpha, alpha);
 }
 
-function createProgram(vertexSource, fragmentSource) {
+function createProgram(vertexSource, fragmentSource, attributeNames = []) {
   const vertexShader = compileShader(gl.VERTEX_SHADER, vertexSource);
   const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentSource);
   const shaderProgram = gl.createProgram();
   gl.attachShader(shaderProgram, vertexShader);
   gl.attachShader(shaderProgram, fragmentShader);
+  attributeNames.forEach((name, index) => gl.bindAttribLocation(shaderProgram, index, name));
   gl.linkProgram(shaderProgram);
   if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
     const message = gl.getProgramInfoLog(shaderProgram);
@@ -2013,6 +2411,47 @@ const FRAGMENT_SHADER = `
     float brightness = 0.3 + lighting * 0.7;
     vec3 litColor = uColor.rgb * brightness + uColor.rgb * uEmissive;
     gl_FragColor = vec4(mix(litColor, uFogColor, vFog), uAlpha);
+  }
+`;
+
+const TEX_VERTEX_SHADER = `
+  attribute vec3 aPosition;
+  attribute vec2 aUV;
+
+  uniform mat4 uModel;
+  uniform mat4 uViewProjection;
+  uniform vec3 uCameraPosition;
+
+  varying vec2 vUV;
+  varying float vFog;
+
+  void main() {
+    vec4 worldPosition = uModel * vec4(aPosition, 1.0);
+    gl_Position = uViewProjection * worldPosition;
+    vUV = aUV;
+    float distanceToCamera = length(worldPosition.xyz - uCameraPosition);
+    vFog = clamp((distanceToCamera - 30.0) / 115.0, 0.0, 0.9);
+  }
+`;
+
+const TEX_FRAGMENT_SHADER = `
+  precision mediump float;
+
+  uniform sampler2D uTexture;
+  uniform vec3 uFogColor;
+  uniform float uGlow;
+  uniform float uAlpha;
+
+  varying vec2 vUV;
+  varying float vFog;
+
+  void main() {
+    vec4 texel = texture2D(uTexture, vUV);
+    if (texel.a < 0.03) {
+      discard;
+    }
+    vec3 litColor = texel.rgb * (0.85 + uGlow);
+    gl_FragColor = vec4(mix(litColor, uFogColor, vFog), texel.a * uAlpha);
   }
 `;
 
