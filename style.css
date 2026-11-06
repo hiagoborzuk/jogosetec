@@ -3053,3 +3053,34 @@ body[data-theme="5"] .aurora, body[data-theme="5"] .sky-glow { filter: hue-rotat
 .lightning-flash.visible {
   opacity: 1;
 }
+
+/* painéis laterais: troca suave e formato conforme a logo */
+.school-side img {
+  transition: opacity 420ms ease;
+}
+
+.school-side img.swapping {
+  opacity: 0;
+}
+
+.school-side img[data-kind="ds"],
+.school-side img[data-kind="setecFlat"] {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  object-fit: contain !important;
+  filter: drop-shadow(0 0 22px rgba(111, 244, 255, 0.55));
+}
+
+.school-side img[data-kind="setecFlat"] {
+  border-radius: 14px !important;
+}
+
+.school-side img[data-kind="barbosa"],
+.school-side img[data-kind="barbosa2"] {
+  border: 2px solid rgba(111, 244, 255, 0.6) !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  background: #0a1233 !important;
+}
