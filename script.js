@@ -2,8 +2,6 @@
 
 const canvas = document.querySelector("#gameCanvas");
 const ui = {
-  splashScreen: document.querySelector("#splashScreen"),
-  splashButton: document.querySelector("#splashButton"),
   menuScreen: document.querySelector("#menuScreen"),
   helpScreen: document.querySelector("#helpScreen"),
   settingsScreen: document.querySelector("#settingsScreen"),
@@ -377,7 +375,7 @@ function initializeGame() {
     bindEvents();
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
-    showSplash();
+    showMenu();
     canvasReady = true;
     requestAnimationFrame(frame);
     renderScene(0);
@@ -390,7 +388,6 @@ function initializeGame() {
 function showWebGLError(message) {
   state.phase = "error";
   ui.errorMessage.textContent = message;
-  ui.splashScreen.hidden = true;
   ui.menuScreen.hidden = true;
   ui.helpScreen.hidden = true;
   ui.settingsScreen.hidden = true;
@@ -400,17 +397,6 @@ function showWebGLError(message) {
   ui.errorScreen.hidden = false;
   ui.pauseButton.disabled = true;
   ui.playButton.disabled = true;
-}
-
-function showSplash() {
-  state.phase = "menu";
-  state.settingsOrigin = "menu";
-  resetWorld();
-  hideAllScreens();
-  ui.splashScreen.hidden = false;
-  ui.pauseButton.disabled = true;
-  setStatus("Tela inicial • aperte Começar");
-  window.setTimeout(() => ui.splashButton.focus(), 0);
 }
 
 function showMenu() {
@@ -427,7 +413,6 @@ function showMenu() {
 }
 
 function hideAllScreens() {
-  ui.splashScreen.hidden = true;
   ui.menuScreen.hidden = true;
   ui.helpScreen.hidden = true;
   ui.settingsScreen.hidden = true;
@@ -736,7 +721,7 @@ function resetWorld() {
     x: (index % 2 === 0 ? -1 : 1) * randomBetween(8, 10.2),
     y: randomBetween(3, 5.4),
     z: -10 - index * 16.8,
-    size: randomBetween(3.8, 5),
+    size: randomBetween(2.6, 3.4),
     phase: randomBetween(0, Math.PI * 2)
   }));
 
@@ -1052,7 +1037,7 @@ function updateGame(deltaTime) {
       logo.name = SIDE_LOGO_NAMES[sideLogoCounter % SIDE_LOGO_NAMES.length];
       logo.x = (sideLogoCounter % 2 === 0 ? -1 : 1) * randomBetween(8, 10.2);
       logo.y = randomBetween(3, 5.4);
-      logo.size = randomBetween(3.8, 5);
+      logo.size = randomBetween(2.6, 3.4);
     }
   });
 
@@ -1636,9 +1621,9 @@ function drawArtLayer(time, palette) {
     const z = state.gateZ;
     const pulse = 1 + Math.sin(time * 3) * 0.04;
     const logo = portalArt.tex.barbosa;
-    drawArtQuad(portalArt.halo, 0, 3.7, z - 0.05, 6.2 * pulse, 6.2 * pulse, 0.9, 0.85);
-    drawArtQuad(logo, 0, 3.7, z + 0.12, 3.9, 3.9, 0.35, 1);
-    drawArtQuad(portalArt.label, 0, 5.95, z + 0.12, 4.4, 1.1, 0.4, 1);
+    drawArtQuad(portalArt.halo, 0, 3.5, z - 0.05, 8.6 * pulse, 8.6 * pulse, 1, 0.9);
+    drawArtQuad(logo, 0, 3.3, z + 0.12, 5.0, 5.0, 0.45, 1);
+    drawArtQuad(portalArt.label, 0, 6.15, z + 0.12, 4.4, 1.1, 0.5, 1);
   }
 
   gl.useProgram(program);
@@ -1785,7 +1770,7 @@ function drawPlayer(time, palette) {
 }
 
 function trapDialogFocus(event) {
-  const dialogs = [ui.splashScreen, ui.menuScreen, ui.helpScreen, ui.settingsScreen, ui.pauseScreen, ui.phaseScreen, ui.resultScreen, ui.errorScreen];
+  const dialogs = [ui.menuScreen, ui.helpScreen, ui.settingsScreen, ui.pauseScreen, ui.phaseScreen, ui.resultScreen, ui.errorScreen];
   const dialog = dialogs.find((screen) => !screen.hidden);
   if (!dialog) {
     return;
@@ -1810,8 +1795,41 @@ function trapDialogFocus(event) {
   }
 }
 
+/* Painéis laterais da tela: as duas logos se alternam (esquerda e direita sempre diferentes). */
+const HUD_LOGO_SEQUENCE = ["barbosa", "ds", "setecFlat", "barbosa2"];
+let hudLogoStep = 0;
+
+function setHudLogo(img, name) {
+  const source = (window.LOGOS && window.LOGOS[name]) || img.src;
+  img.dataset.kind = name;
+  img.src = source;
+}
+
+function startHudLogoRotation() {
+  const left = document.querySelector(".school-side-left img");
+  const right = document.querySelector(".school-side-right img");
+  if (!left || !right) {
+    return;
+  }
+  const apply = () => {
+    setHudLogo(left, HUD_LOGO_SEQUENCE[hudLogoStep % HUD_LOGO_SEQUENCE.length]);
+    setHudLogo(right, HUD_LOGO_SEQUENCE[(hudLogoStep + 1) % HUD_LOGO_SEQUENCE.length]);
+  };
+  apply();
+  window.setInterval(() => {
+    left.classList.add("swapping");
+    right.classList.add("swapping");
+    window.setTimeout(() => {
+      hudLogoStep += 1;
+      apply();
+      left.classList.remove("swapping");
+      right.classList.remove("swapping");
+    }, 450);
+  }, 5000);
+}
+
 function bindEvents() {
-  ui.splashButton.addEventListener("click", showMenu);
+  startHudLogoRotation();
   ui.playButton.addEventListener("click", startRun);
   ui.howToButton.addEventListener("click", openHelp);
   ui.accessibilityButton.addEventListener("click", () => openSettings("menu"));
@@ -1884,15 +1902,6 @@ function bindEvents() {
     const resultOpen = !ui.resultScreen.hidden;
     const errorOpen = !ui.errorScreen.hidden;
     const menuOpen = !ui.menuScreen.hidden;
-    const splashOpen = !ui.splashScreen.hidden;
-
-    if (splashOpen) {
-      if (event.code === "Enter" || event.code === "Space") {
-        event.preventDefault();
-        showMenu();
-      }
-      return;
-    }
 
     if (event.key === "Escape") {
       if (helpOpen) {
