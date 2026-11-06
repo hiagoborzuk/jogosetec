@@ -2787,3 +2787,255 @@ body.reduce-motion .menu-overlay *::after {
     animation: none !important;
   }
 }
+
+/* ---------- Novas imagens: emblema 2° D.S e cartaz da SETEC ---------- */
+.brand-ds {
+  display: block;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(111, 244, 255, 0.55));
+}
+
+.ds-emblem {
+  display: block;
+  width: clamp(40px, 6vh, 54px);
+  height: clamp(40px, 6vh, 54px);
+  object-fit: contain;
+  filter: drop-shadow(0 0 14px rgba(111, 244, 255, 0.6));
+}
+
+.ds-emblem-small {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 12px rgba(111, 244, 255, 0.5));
+}
+
+.setec-card {
+  position: absolute;
+  z-index: 2;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 260px;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--line-bright);
+  border-radius: 16px;
+  color: #d7e1ff;
+  background: rgba(6, 9, 29, 0.72);
+  text-decoration: none;
+  backdrop-filter: blur(8px);
+  transition: transform 150ms ease, border-color 150ms ease;
+}
+
+.setec-card:hover,
+.setec-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--cyan);
+}
+
+.setec-card img {
+  display: block;
+  width: 64px;
+  height: auto;
+  aspect-ratio: 1099 / 960;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.setec-card span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.setec-card small {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.setec-card strong {
+  color: var(--cyan-bright);
+  font-size: 0.95rem;
+  font-weight: 950;
+}
+
+@media (max-width: 760px), (max-height: 560px) {
+  .setec-card {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .brand-ds {
+    display: none;
+  }
+}
+
+/* ================= Tela inicial (splash), crédito e temas das fases ================= */
+.splash-overlay {
+  z-index: 14;
+  background: linear-gradient(135deg, rgba(3, 5, 20, 0.2), rgba(8, 4, 32, 0.62));
+}
+
+.splash-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: min(100%, 860px);
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 1.6vh, 16px);
+  text-align: center;
+}
+
+.splash-logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 4vw, 48px);
+}
+
+.splash-main .menu-logo {
+  width: clamp(120px, 24vh, 200px);
+  height: clamp(120px, 24vh, 200px);
+}
+
+.splash-side {
+  display: block;
+  width: clamp(74px, 15vh, 140px);
+  height: auto;
+  object-fit: contain;
+  animation: splash-float 5s ease-in-out infinite;
+  filter: drop-shadow(0 0 18px rgba(111, 244, 255, 0.5));
+}
+
+.splash-setec {
+  border-radius: 14px;
+  animation-delay: -2.5s;
+}
+
+.splash-school {
+  margin: 4px 0 0;
+  color: #cfe0ff;
+  font-size: clamp(0.72rem, 1.5vw, 0.95rem);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.splash-title {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(2.3rem, 8vw, 4.6rem);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 0 34px rgba(111, 244, 255, 0.5), 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.splash-title span {
+  background: linear-gradient(90deg, var(--pink), var(--violet));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.splash-class {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  color: #d7e1ff;
+  font-size: clamp(0.78rem, 1.6vw, 1rem);
+  font-weight: 700;
+}
+
+@keyframes splash-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+
+.dev-credit {
+  position: absolute;
+  z-index: 40;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  padding: 6px 14px;
+  border: 1px solid var(--line-bright);
+  border-radius: 99px;
+  color: #cfe0ff;
+  background: rgba(6, 9, 29, 0.78);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.dev-credit strong {
+  color: var(--cyan-bright);
+  font-weight: 900;
+}
+
+/* lateral direita do jogo: emblema do 2° D.S sem moldura redonda */
+.school-side img.side-ds {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+  box-shadow: none;
+  filter: drop-shadow(0 0 22px rgba(111, 244, 255, 0.55));
+}
+
+/* cartaz da SETEC passa para o canto esquerdo (o direito é do crédito) */
+.setec-card {
+  right: auto;
+  left: max(18px, env(safe-area-inset-left));
+}
+
+/* cada fase muda a cor da aurora de fundo */
+.aurora,
+.sky-glow {
+  transition: filter 900ms ease;
+}
+
+body[data-theme="2"] .aurora, body[data-theme="2"] .sky-glow { filter: hue-rotate(150deg) saturate(1.1); }
+body[data-theme="3"] .aurora, body[data-theme="3"] .sky-glow { filter: hue-rotate(75deg); }
+body[data-theme="4"] .aurora, body[data-theme="4"] .sky-glow { filter: hue-rotate(-50deg) saturate(1.15); }
+body[data-theme="5"] .aurora, body[data-theme="5"] .sky-glow { filter: hue-rotate(-110deg) saturate(1.2); }
+
+@media (max-width: 760px) {
+  .dev-credit {
+    right: 50%;
+    transform: translateX(50%);
+    bottom: max(6px, env(safe-area-inset-bottom));
+    font-size: 0.66rem;
+    white-space: nowrap;
+  }
+  .splash-side {
+    width: clamp(52px, 17vw, 86px);
+  }
+}
+
+.splash-main {
+  width: clamp(120px, 24vh, 200px);
+  height: clamp(120px, 24vh, 200px);
+  margin-bottom: clamp(10px, 2vh, 20px);
+}
+
+.school-side img.side-ds {
+  box-shadow: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
