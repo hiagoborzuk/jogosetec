@@ -296,6 +296,9 @@ const state = {
   invulnerable: 0,
   boostTimer: 0,
   shield: false,
+  phaseHit: false,
+  recoverTimer: 0,
+  ambient: [],
   magnet: 0,
   dt: 0,
   streaks: [],
@@ -557,6 +560,11 @@ function completeCurrentPhase() {
   state.completedPhases = completedPhase.number;
   const crystalGoalReached = state.phaseCrystals >= completedPhase.crystalGoal;
 
+  const perfectPhase = !state.phaseHit;
+  if (perfectPhase) {
+    state.crystalScore += 200;
+  }
+
   if (crystalGoalReached) {
     state.crystalScore += 100;
     state.health = Math.min(CONFIG.maxHealth, state.health + 1);
@@ -578,9 +586,9 @@ function completeCurrentPhase() {
   ui.phaseBadge.textContent = completedPhase.number === 1 ? "✦" : "◈";
   ui.phaseTag.textContent = `Fase ${completedPhase.number} concluída`;
   ui.phaseTitle.textContent = completedPhase.name;
-  ui.phaseDescription.textContent = crystalGoalReached
+  ui.phaseDescription.textContent = (crystalGoalReached
     ? `Você atravessou ${completedPhase.name}. Meta de cristais cumprida: +100 pontos e uma integridade reparada.`
-    : `Você atravessou ${completedPhase.name}. Coletar mais cristais teria dado um bônus de pontos e integridade.`;
+    : `Você atravessou ${completedPhase.name}. Coletar mais cristais teria dado um bônus de pontos e integridade.`) + (perfectPhase ? " Fase perfeita, sem nenhuma batida: +200 pontos!" : "");
   ui.phaseDistance.textContent = `${formatNumber(completedPhase.distance)} m`;
   ui.phaseCrystalsValue.textContent = `${state.phaseCrystals} / ${completedPhase.crystalGoal}`;
   ui.phaseNextText.textContent = `Próxima: ${nextPhase.name} — ${nextPhase.description}`;
@@ -600,10 +608,13 @@ function beginNextPhase() {
   state.phaseStartDistance = state.distance;
   state.phaseDistance = 0;
   state.phaseCrystals = 0;
+  state.phaseHit = false;
   state.stage = 0;
   state.boostTimer = 0;
   state.shield = false;
   state.magnet = 0;
+  state.recoverTimer = 0;
+  state.ambient = Array.from({ length: 34 }, () => makeAmbient(true));
   state.streaks = Array.from({ length: 18 }, () => ({ x: randomBetween(-8, 8), y: randomBetween(0.3, 5), z: randomBetween(-110, 0), len: randomBetween(3, 8) }));
   state.worldTime = 0;
   state.lightning = 4;
@@ -705,6 +716,7 @@ function resetWorld() {
   state.phaseStartDistance = 0;
   state.phaseDistance = 0;
   state.phaseCrystals = 0;
+  state.phaseHit = false;
   state.completedPhases = 0;
   state.jumpBuffer = 0;
   initGates();
@@ -1041,8 +1053,10 @@ function updateGame(deltaTime) {
 
   const phase = getCurrentPhase();
   const phaseProgress = getPhaseProgress();
-  const baseSpeed = phase.baseSpeed + phaseProgress * 3;
-  state.speed = clamp(baseSpeed + (state.boostActive ? 8 : 0), phase.baseSpeed, CONFIG.maxSpeed + 8);
+  state.recoverTimer = Math.max(0, state.recoverTimer - deltaTime);
+  const recovery = 1 - 0.18 * Math.min(1, state.recoverTimer / 1.2); // após um tombo o ritmo cai um pouco e volta
+  const baseSpeed = (phase.baseSpeed + phaseProgress * 3) * recovery;
+  state.speed = clamp(baseSpeed + (state.boostActive ? 8 : 0), phase.baseSpeed * 0.8, CONFIG.maxSpeed + 8);
   const worldMovement = state.speed * deltaTime;
   state.distance += worldMovement;
   state.spawnZ += worldMovement;
@@ -1061,6 +1075,7 @@ function updateGame(deltaTime) {
     }
   });
   updateLightning(deltaTime);
+  updateAmbient(deltaTime, worldMovement);
   updateGates();
 
   state.roadMarkers.forEach((marker) => {
@@ -1323,6 +1338,8 @@ function takeDamage(object) {
 
   state.health = Math.max(0, state.health - 1);
   state.invulnerable = 1.35;
+  state.phaseHit = true;
+  state.recoverTimer = 2.2;
   state.combo = 0;
   state.shake = 0.45;
   state.flash = 0.26;
@@ -1492,6 +1509,8 @@ function drawEnvironment(time, palette) {
 
   drawSideDecor(time, palette);
 
+  drawAmbient(time, palette);
+
   if (!state.settings.motion) {
     const stretch = clamp(state.speed / 20, 0.5, 2);
     state.streaks.forEach((streak) => {
@@ -1511,6 +1530,64 @@ function drawEnvironment(time, palette) {
   drawOctahedron(-32, 5, -170, 13, 9, 13, palette.mountainFar, 0, -0.3, 0, 0.01);
 
   drawPortal(time, palette);
+}
+
+/* Partículas do ambiente: cada fase tem as suas (brasas, vaga-lumes, chuva, brilhos). */
+function makeAmbient(initial = false) {
+  const side = Math.random() < 0.5 ? -1 : 1;
+  return {
+    x: side * randomBetween(1.5, 11),
+    y: randomBetween(0.2, 7),
+    z: initial ? randomBetween(-100, 4) : randomBetween(-110, -90),
+    seed: randomBetween(0, Math.PI * 2)
+  };
+}
+
+function updateAmbient(deltaTime, worldMovement) {
+  const theme = clamp(state.phaseIndex, 0, 4);
+  state.ambient.forEach((item) => {
+    item.z += worldMovement * 0.9;
+    if (theme === 1) {
+      item.y += deltaTime * 1.6; // brasas sobem
+    } else if (theme === 3) {
+      item.y -= deltaTime * 26; // chuva cai
+    } else if (theme === 2) {
+      item.x += Math.sin(state.worldTime * 1.3 + item.seed) * deltaTime * 0.8; // vaga-lumes vagam
+      item.y += Math.cos(state.worldTime * 1.1 + item.seed) * deltaTime * 0.5;
+    }
+    if (item.z > 8 || item.y > 9 || item.y < -0.2) {
+      Object.assign(item, makeAmbient(false));
+      if (theme === 3) {
+        item.y = randomBetween(5, 9);
+        item.z = randomBetween(-100, 2);
+      } else if (theme === 1) {
+        item.y = randomBetween(0.1, 1.5);
+      }
+    }
+  });
+}
+
+function drawAmbient(time, palette) {
+  if (state.settings.motion) {
+    return;
+  }
+  const theme = clamp(state.phaseIndex, 0, 4);
+  state.ambient.forEach((item) => {
+    const twinkle = 0.6 + Math.sin(time * 4 + item.seed * 3) * 0.4;
+    if (theme === 1) {
+      drawCube(item.x, item.y, item.z, 0.07, 0.07, 0.07, palette.rail, 0, time + item.seed, 0, 1, 0.8);
+    } else if (theme === 2) {
+      drawOctahedron(item.x, item.y + 0.6, item.z, 0.09 * twinkle, 0.09 * twinkle, 0.09 * twinkle, palette.laneBright, 0, 0, 0, 1);
+    } else if (theme === 3) {
+      if (item.z < -14) {
+        drawCube(item.x, item.y, item.z, 0.02, 0.7, 0.02, palette.laneBright, 0, 0, 0.1, 0.7, 0.35);
+      }
+    } else if (theme === 4) {
+      drawOctahedron(item.x, item.y + 0.5, item.z, 0.14 * twinkle, 0.22 * twinkle, 0.14 * twinkle, palette.laneBright, 0, time + item.seed, 0, 1);
+    } else {
+      drawOctahedron(item.x, item.y * 0.7 + 0.3, item.z, 0.07 * twinkle, 0.1 * twinkle, 0.07 * twinkle, palette.crystal, 0, time, 0, 1);
+    }
+  });
 }
 
 function drawSideDecor(time, palette) {
@@ -1955,7 +2032,7 @@ function startHudLogoRotation() {
 
 /* ---------- Menu rápido (botão ☰ no canto da tela) ---------- */
 const quick = {
-  root: document.querySelector("#quickMenu"),
+  root: document.querySelector(".hud-actions"),
   button: document.querySelector("#quickMenuButton"),
   panel: document.querySelector("#quickMenuPanel"),
   pausedByMenu: false
@@ -1985,6 +2062,14 @@ function closeQuickMenu(resume = true) {
     resumeGame();
   }
   quick.pausedByMenu = false;
+  // devolve o foco ao jogo para o Espaço/Enter não reabrirem o menu sem querer
+  window.setTimeout(() => {
+    if (state.phase === "running" || state.phase === "countdown") {
+      canvas.focus();
+    } else {
+      quick.button.blur();
+    }
+  }, 30);
 }
 
 function handleQuickAction(action) {
@@ -2011,7 +2096,7 @@ function bindQuickMenu() {
     }
   });
   document.addEventListener("pointerdown", (event) => {
-    if (isQuickMenuOpen() && !quick.root.contains(event.target)) {
+    if (isQuickMenuOpen() && !quick.button.contains(event.target) && !quick.panel.contains(event.target)) {
       closeQuickMenu(true);
     }
   });
@@ -2019,14 +2104,25 @@ function bindQuickMenu() {
     if (event.code === "Escape" && isQuickMenuOpen()) {
       event.stopImmediatePropagation();
       closeQuickMenu(true);
-      quick.button.focus();
+      return;
+    }
+    const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement ? document.activeElement.tagName : "");
+    if (event.code === "KeyM" && !typing && state.phase !== "menu" && quick.button.style.display !== "none") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (isQuickMenuOpen()) {
+        closeQuickMenu(true);
+      } else {
+        openQuickMenu();
+      }
     }
   }, true);
   // o botão só aparece fora da tela inicial
   window.setInterval(() => {
     const hide = state.phase === "menu" || !canvasReady;
-    if (quick.root.hidden !== hide) {
-      quick.root.hidden = hide;
+    const display = hide ? "none" : "";
+    if (quick.button.style.display !== display) {
+      quick.button.style.display = display;
       if (hide && isQuickMenuOpen()) {
         closeQuickMenu(false);
       }
