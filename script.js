@@ -1953,7 +1953,89 @@ function startHudLogoRotation() {
   }, 5000);
 }
 
+/* ---------- Menu rápido (botão ☰ no canto da tela) ---------- */
+const quick = {
+  root: document.querySelector("#quickMenu"),
+  button: document.querySelector("#quickMenuButton"),
+  panel: document.querySelector("#quickMenuPanel"),
+  pausedByMenu: false
+};
+
+function isQuickMenuOpen() {
+  return !quick.panel.hidden;
+}
+
+function openQuickMenu() {
+  if (state.phase === "running" || state.phase === "countdown") {
+    pauseGame();
+    ui.pauseScreen.hidden = true;
+    quick.pausedByMenu = true;
+  }
+  quick.panel.hidden = false;
+  quick.button.setAttribute("aria-expanded", "true");
+  quick.button.textContent = "✕";
+  window.setTimeout(() => quick.panel.querySelector("button").focus(), 0);
+}
+
+function closeQuickMenu(resume = true) {
+  quick.panel.hidden = true;
+  quick.button.setAttribute("aria-expanded", "false");
+  quick.button.textContent = "☰";
+  if (resume && quick.pausedByMenu && state.phase === "paused") {
+    resumeGame();
+  }
+  quick.pausedByMenu = false;
+}
+
+function handleQuickAction(action) {
+  if (action === "resume") {
+    closeQuickMenu(true);
+  } else if (action === "restart") {
+    closeQuickMenu(false);
+    startRun();
+  } else if (action === "home") {
+    closeQuickMenu(false);
+    showMenu();
+  } else if (action === "settings") {
+    closeQuickMenu(false);
+    openSettings("pause");
+  }
+}
+
+function bindQuickMenu() {
+  quick.button.addEventListener("click", () => (isQuickMenuOpen() ? closeQuickMenu(true) : openQuickMenu()));
+  quick.panel.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-quick]");
+    if (item) {
+      handleQuickAction(item.dataset.quick);
+    }
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (isQuickMenuOpen() && !quick.root.contains(event.target)) {
+      closeQuickMenu(true);
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.code === "Escape" && isQuickMenuOpen()) {
+      event.stopImmediatePropagation();
+      closeQuickMenu(true);
+      quick.button.focus();
+    }
+  }, true);
+  // o botão só aparece fora da tela inicial
+  window.setInterval(() => {
+    const hide = state.phase === "menu" || !canvasReady;
+    if (quick.root.hidden !== hide) {
+      quick.root.hidden = hide;
+      if (hide && isQuickMenuOpen()) {
+        closeQuickMenu(false);
+      }
+    }
+  }, 200);
+}
+
 function bindEvents() {
+  bindQuickMenu();
   startHudLogoRotation();
   ui.playButton.addEventListener("click", startRun);
   ui.howToButton.addEventListener("click", openHelp);
