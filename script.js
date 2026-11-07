@@ -253,6 +253,13 @@ const PHASE_THEMES = [
   { fog: [0.055, 0.01, 0.09], road: [0.07, 0.03, 0.15, 1], shoulder: [0.13, 0.06, 0.26, 1], rail: [0.86, 0.45, 1, 1], lane: [0.6, 0.38, 0.95, 1], laneBright: [0.96, 0.7, 1, 1], mountain: [0.19, 0.05, 0.32, 1], mountainFar: [0.28, 0.08, 0.45, 1], violet: [1, 0.5, 0.95, 1] },
   { fog: [0.09, 0.02, 0.07], road: [0.1, 0.04, 0.12, 1], shoulder: [0.2, 0.08, 0.22, 1], rail: [1, 0.55, 0.8, 1], lane: [0.95, 0.55, 0.7, 1], laneBright: [1, 0.86, 0.5, 1], mountain: [0.3, 0.08, 0.3, 1], mountainFar: [0.42, 0.13, 0.4, 1], violet: [1, 0.8, 0.4, 1] }
 ];
+const PHASE_TIPS = [
+  "Dica: A e D trocam de faixa. Pegue cristais para fazer sequência.",
+  "Dica: pedras caem do alto! A marca vermelha no chão mostra a faixa.",
+  "Dica: galhos pedem deslize (S) e barreiras balançam. Pegue ímãs e escudos.",
+  "Dica: tempestade! Combine pulo e deslize rápido. Reparos recuperam integridade.",
+  "Dica: última fase, tudo junto. Passe raspando nos obstáculos para bônus!"
+];
 const THEMED_PALETTES = PHASE_THEMES.map((theme) => Object.assign({}, PALETTES.normal, theme));
 /* Lista com número ímpar de itens: como o lado alterna esquerda/direita, cada lado vê todas as logos em rodízio. */
 const SIDE_LOGO_NAMES = ["barbosa", "ds", "setec", "barbosa2", "ds"];
@@ -289,6 +296,9 @@ const state = {
   invulnerable: 0,
   boostTimer: 0,
   shield: false,
+  magnet: 0,
+  dt: 0,
+  streaks: [],
   worldTime: 0,
   lightning: 4,
   rainDone: false,
@@ -593,6 +603,8 @@ function beginNextPhase() {
   state.stage = 0;
   state.boostTimer = 0;
   state.shield = false;
+  state.magnet = 0;
+  state.streaks = Array.from({ length: 18 }, () => ({ x: randomBetween(-8, 8), y: randomBetween(0.3, 5), z: randomBetween(-110, 0), len: randomBetween(3, 8) }));
   state.worldTime = 0;
   state.lightning = 4;
   state.boostActive = false;
@@ -755,8 +767,8 @@ function getRowGap() {
 
 function createObject(type, lane, z, palette, overrides = {}) {
   const isCrystal = type === "crystal";
-  const isBoost = type === "boost" || type === "shield";
-  const color = isCrystal ? palette.crystal : type === "shield" ? palette.laneBright : isBoost ? palette.boost : type === "wall" ? palette.wall : type === "branch" ? palette.branch : palette.rock;
+  const isBoost = type === "boost" || type === "shield" || type === "magnet" || type === "heal";
+  const color = isCrystal ? palette.crystal : type === "shield" ? palette.laneBright : type === "magnet" ? palette.violet : type === "heal" ? palette.wall : isBoost ? palette.boost : type === "wall" ? palette.wall : type === "branch" ? palette.branch : palette.rock;
   return Object.assign({
     type,
     lane,
@@ -781,6 +793,15 @@ function pickPattern(phaseNumber) {
   }
   if (phaseNumber >= 2 && !state.shield) {
     pool.push(["shield", 0.9]);
+  }
+  if (phaseNumber >= 2) {
+    pool.push(["fallingRocks", 2]);
+  }
+  if (phaseNumber >= 3 && state.magnet <= 0) {
+    pool.push(["magnet", 0.8]);
+  }
+  if (phaseNumber >= 3 && state.health < CONFIG.maxHealth) {
+    pool.push(["heal", 1.4]);
   }
   if (phaseNumber >= 3) {
     pool.push(["branchWall", 1.7], ["rockWall", 1.7], ["sway", 1.6]);
@@ -840,6 +861,26 @@ function spawnRow(z) {
   }
 
   const pattern = pickPattern(phase.number);
+
+  if (pattern === "magnet" || pattern === "heal") {
+    add(pattern, lane, z);
+    for (let index = 0; index < 3; index += 1) {
+      add("crystal", (lane + 1) % 3, z - 2 - index * 2);
+      if (pattern === "magnet") {
+        add("crystal", (lane + 2) % 3, z - 3 - index * 2);
+      }
+    }
+    return 7;
+  }
+
+  if (pattern === "fallingRocks") {
+    // pedras caem do alto: a marca vermelha no chão avisa a faixa
+    const lanes = phase.number >= 4 ? [0, 1, 2].filter((index) => index !== free) : [lane];
+    lanes.forEach((index) => add("rock", index, z, { fall: true, y: 9 }));
+    add("crystal", free, z - 1, {});
+    add("crystal", free, z - 3, {});
+    return 5;
+  }
 
   if (pattern === "shield") {
     add("shield", lane, z);
@@ -1009,6 +1050,16 @@ function updateGame(deltaTime) {
   state.score = Math.floor(state.distance * 2 + state.crystalScore);
   state.jumpBuffer = Math.max(0, state.jumpBuffer - deltaTime);
   state.worldTime += deltaTime;
+  state.dt = deltaTime;
+  state.magnet = Math.max(0, state.magnet - deltaTime);
+  state.streaks.forEach((streak) => {
+    streak.z += worldMovement * 1.7;
+    if (streak.z > 8) {
+      streak.z -= randomBetween(110, 130);
+      streak.x = randomBetween(-8, 8);
+      streak.y = randomBetween(0.3, 5);
+    }
+  });
   updateLightning(deltaTime);
   updateGates();
 
@@ -1102,6 +1153,13 @@ function updateObjects(worldMovement) {
     object.z += worldMovement;
     object.rotationY += object.type === "crystal" ? worldMovement * 0.018 : 0.004;
     object.rotationX += object.type === "rock" ? worldMovement * 0.005 : 0;
+    if (object.fall) {
+      const t = clamp((-object.z - 5) / 28, 0, 1);
+      object.y = 0.55 + t * t * 9;
+    }
+    if (state.magnet > 0 && object.type === "crystal" && object.z > -26 && object.z < 2) {
+      object.x += (state.playerX - object.x) * Math.min(1, state.dt * 7);
+    }
     if (object.sway) {
       object.x = object.sway.mid + Math.sin(state.worldTime * object.sway.speed + object.sway.offset) * object.sway.amp;
     }
@@ -1109,6 +1167,18 @@ function updateObjects(worldMovement) {
     if (object.z > 14 || object.remove) {
       object.remove = true;
       continue;
+    }
+
+    if (!object.near && object.z > 0.5 && previousZ <= 0.5 && (object.type === "wall" || object.type === "rock" || object.type === "branch")) {
+      object.near = true;
+      const gap = Math.abs(object.x - state.playerX) - (object.width * 0.5 + 0.48);
+      if (gap > 0 && gap < 0.55) {
+        state.crystalScore += 10;
+        state.combo += 1;
+        state.bestCombo = Math.max(state.bestCombo, state.combo);
+        spawnParticles(state.playerX, 0.9, 0, activePalette().starWarm, 8);
+        announce("Raspão! +10 pontos", false);
+      }
     }
 
     if (object.passed || !overlapsPlayer(object, previousZ)) {
@@ -1125,6 +1195,10 @@ function updateObjects(worldMovement) {
       collectBoost(object);
     } else if (object.type === "shield") {
       collectShield(object);
+    } else if (object.type === "magnet") {
+      collectMagnet(object);
+    } else if (object.type === "heal") {
+      collectHeal(object);
     } else if (object.type === "branch") {
       if (state.sliding) {
         object.passed = true;
@@ -1169,11 +1243,31 @@ function collectCrystal(object) {
   state.combo += 1;
   state.bestCombo = Math.max(state.bestCombo, state.combo);
   const comboBonus = Math.min(Math.max(state.combo - 1, 0) * 5, 50);
-  state.crystalScore += 25 + comboBonus;
+  const multiplier = Math.min(3, 1 + Math.floor(state.combo / 10) * 0.5);
+  state.crystalScore += Math.round((25 + comboBonus) * multiplier);
   state.score = Math.floor(state.distance * 2 + state.crystalScore);
   spawnParticles(object.x, object.y, object.z, activePalette().crystal, 14);
   playTone(620 + Math.min(state.combo, 8) * 35, 0.09, "sine", 0.035);
-  announce(`Cristal coletado • sequência x${state.combo}`, false);
+  announce(multiplier > 1 ? `Sequência x${state.combo} • pontos x${multiplier}` : `Cristal coletado • sequência x${state.combo}`, false);
+  updateHud();
+}
+
+function collectMagnet(object) {
+  object.remove = true;
+  state.magnet = 6;
+  state.crystalScore += 15;
+  spawnParticles(object.x, object.y, object.z, activePalette().violet, 16);
+  playTone(500, 0.18, "triangle", 0.035);
+  announce("Ímã ativo • os cristais vêm até você por 6 segundos", false);
+}
+
+function collectHeal(object) {
+  object.remove = true;
+  state.health = Math.min(CONFIG.maxHealth, state.health + 1);
+  state.crystalScore += 15;
+  spawnParticles(object.x, object.y, object.z, activePalette().wall, 16);
+  playTone(740, 0.2, "sine", 0.04);
+  announce(`Reparo • integridade ${state.health} de ${CONFIG.maxHealth}`, false);
   updateHud();
 }
 
@@ -1314,6 +1408,12 @@ function updateCountdown(deltaTime) {
     focusGameCanvas();
     const phase = getCurrentPhase();
     setStatus(`Valendo! • Fase ${phase.number}: ${phase.name}`);
+    const phaseIndexAtStart = state.phaseIndex;
+    window.setTimeout(() => {
+      if (state.phase === "running" && state.phaseIndex === phaseIndexAtStart) {
+        announce(PHASE_TIPS[phaseIndexAtStart] || "", false);
+      }
+    }, 1800);
     playTone(660, 0.12, "sine", 0.04);
   }
 }
@@ -1391,6 +1491,13 @@ function drawEnvironment(time, palette) {
   });
 
   drawSideDecor(time, palette);
+
+  if (!state.settings.motion) {
+    const stretch = clamp(state.speed / 20, 0.5, 2);
+    state.streaks.forEach((streak) => {
+      drawCube(streak.x, streak.y, streak.z, 0.04, 0.04, streak.len * stretch, palette.laneBright, 0, 0, 0, 0.6, 0.35);
+    });
+  }
 
   state.stars.forEach((star) => {
     const pulse = 0.65 + Math.sin(time * 1.8 + star.phase) * 0.35;
@@ -1679,11 +1786,24 @@ function drawObjects(time, palette) {
       return;
     }
 
+    if (object.type === "magnet" || object.type === "heal") {
+      const bob = Math.sin(time * 3 + object.phase) * 0.15;
+      drawOctahedron(object.x, object.y + bob, object.z, 0.7, 0.95, 0.7, object.color, 0, time * 2, 0, 1);
+      drawCube(object.x, object.y + bob, object.z, 0.16, 1.3, 0.16, palette.laneBright, 0, 0, 0, 1);
+      drawCube(object.x, object.y + bob, object.z, 1.3, 0.16, 0.16, palette.laneBright, 0, 0, 0, 1);
+      return;
+    }
+
     if (object.type === "shield") {
       const bob = Math.sin(time * 3 + object.phase) * 0.15;
       drawOctahedron(object.x, object.y + bob, object.z, 0.7, 0.95, 0.7, object.color, 0, time * 2, 0, 1);
       drawOctahedron(object.x, object.y + bob, object.z, 1.35, 1.35, 1.35, palette.cyan, 0, -time, 0, 0.3, 0.28);
       return;
+    }
+
+    if (object.type === "rock" && object.fall) {
+      const closeness = clamp(1 - (-object.z) / 40, 0, 1);
+      drawCube(object.x, 0.05, object.z, 1.9, 0.05, 1.9, palette.wall, 0, 0, 0, 0.5 + closeness * 0.9, 0.35 + closeness * 0.5);
     }
 
     if (object.type === "rock") {
@@ -1752,6 +1872,11 @@ function drawPlayer(time, palette) {
     drawCube(state.playerX, y + 0.54, -0.15, 0.95, 0.5, 1.2, palette.suit, 0, bank, bank - 0.08, 0.25, opacity);
     drawOctahedron(state.playerX, y + 1.0, -0.42, 0.46, 0.46, 0.46, palette.helmet, 0, bank + time * 0.25, 0, 0.45, opacity);
     drawCube(state.playerX, y + 1.0, -0.67, 0.4, 0.18, 0.07, palette.visor, 0, bank, bank, 0.25, opacity);
+  }
+
+  if (state.magnet > 0) {
+    drawOctahedron(state.playerX + Math.cos(time * 4) * 1.3, y + 1.5, Math.sin(time * 4) * 0.8, 0.2, 0.2, 0.2, palette.violet, 0, time * 5, 0, 1);
+    drawOctahedron(state.playerX - Math.cos(time * 4) * 1.3, y + 0.5, -Math.sin(time * 4) * 0.8, 0.2, 0.2, 0.2, palette.violet, 0, time * 5, 0, 1);
   }
 
   if (state.shield) {
@@ -2245,7 +2370,9 @@ function describeObject(object) {
     branch: "galho suspenso",
     crystal: "cristal",
     boost: "orbe de impulso",
-    shield: "escudo de cristal"
+    shield: "escudo de cristal",
+    magnet: "ímã de cristais",
+    heal: "reparo de integridade"
   };
   return labels[object.type] || "obstáculo";
 }
