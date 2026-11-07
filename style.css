@@ -3085,58 +3085,36 @@ body[data-theme="5"] .aurora, body[data-theme="5"] .sky-glow { filter: hue-rotat
   background: #0a1233 !important;
 }
 
-/* ---------- Menu rápido ---------- */
-.quick-menu {
-  position: absolute;
-  z-index: 60;
-  left: max(14px, env(safe-area-inset-left));
-  bottom: max(14px, env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+/* ---------- Menu rápido (botão ☰ ao lado de som/pausa) ---------- */
+.hud-actions {
+  position: relative;
 }
 
-.quick-menu[hidden],
-.quick-menu-panel[hidden] {
-  display: none;
-}
-
-.quick-menu-button {
-  display: grid;
-  width: 50px;
-  height: 50px;
-  place-items: center;
-  border: 1px solid var(--line-bright);
-  border-radius: 16px;
-  color: #fff;
-  background: rgba(7, 10, 32, 0.82);
-  font-size: 1.3rem;
-  font-weight: 900;
-  cursor: pointer;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 0 18px rgba(111, 244, 255, 0.25);
-  transition: transform 150ms ease, background 150ms ease;
-}
-
-.quick-menu-button:hover,
 .quick-menu-button[aria-expanded="true"] {
-  background: rgba(111, 244, 255, 0.2);
-  transform: translateY(-2px);
+  border-color: var(--cyan);
+  background: rgba(111, 244, 255, 0.22);
 }
 
 .quick-menu-panel {
+  position: absolute;
+  z-index: 70;
+  top: 76px;
+  right: max(14px, env(safe-area-inset-right));
   display: flex;
-  min-width: 210px;
+  min-width: 220px;
   flex-direction: column;
   gap: 4px;
   padding: 8px;
   border: 1px solid var(--line-bright);
   border-radius: 18px;
-  background: rgba(7, 10, 32, 0.92);
+  background: rgba(7, 10, 32, 0.94);
   backdrop-filter: blur(14px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   animation: quick-in 160ms ease-out;
+}
+
+.quick-menu-panel[hidden] {
+  display: none;
 }
 
 .quick-menu-panel button {
@@ -3168,6 +3146,25 @@ body[data-theme="5"] .aurora, body[data-theme="5"] .sky-glow { filter: hue-rotat
 }
 
 @keyframes quick-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
   to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 760px) {
+  .hud-actions {
+    min-width: 0;
+    gap: 6px;
+  }
+  .hud-actions .round-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .quick-menu-panel {
+    top: 62px;
+    right: max(10px, env(safe-area-inset-right));
+  }
 }
