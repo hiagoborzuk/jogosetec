@@ -3084,3 +3084,90 @@ body[data-theme="5"] .aurora, body[data-theme="5"] .sky-glow { filter: hue-rotat
   object-fit: cover !important;
   background: #0a1233 !important;
 }
+
+/* ---------- Menu rápido ---------- */
+.quick-menu {
+  position: absolute;
+  z-index: 60;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.quick-menu[hidden],
+.quick-menu-panel[hidden] {
+  display: none;
+}
+
+.quick-menu-button {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border: 1px solid var(--line-bright);
+  border-radius: 16px;
+  color: #fff;
+  background: rgba(7, 10, 32, 0.82);
+  font-size: 1.3rem;
+  font-weight: 900;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 18px rgba(111, 244, 255, 0.25);
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.quick-menu-button:hover,
+.quick-menu-button[aria-expanded="true"] {
+  background: rgba(111, 244, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.quick-menu-panel {
+  display: flex;
+  min-width: 210px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line-bright);
+  border-radius: 18px;
+  background: rgba(7, 10, 32, 0.92);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  animation: quick-in 160ms ease-out;
+}
+
+.quick-menu-panel button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  color: #eaf1ff;
+  background: transparent;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-menu-panel button span {
+  width: 20px;
+  color: var(--cyan-bright);
+  text-align: center;
+}
+
+.quick-menu-panel button:hover,
+.quick-menu-panel button:focus-visible {
+  background: rgba(111, 244, 255, 0.16);
+  outline: none;
+}
+
+@keyframes quick-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
